@@ -10,66 +10,54 @@ permissions:
 
 env:
   MIX_ENV: test
+  OTP_VERSION: "28"
+  ELIXIR_VERSION: "1.19"
 
 jobs:
   test:
-    name: Test / Credo / Dialyzer
+    name: Test
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - otp: "28"
-            elixir: "1.19"
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Elixir
-        id: beam
-        uses: erlef/setup-beam@v1
+      - uses: ./.github/actions/setup
         with:
-          otp-version: ${{ matrix.otp }}
-          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+      - run: mix format --check-formatted
+      - run: mix test
 
-      - name: Cache deps
-        uses: actions/cache@v4
+  credo:
+    name: Credo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
         with:
-          path: deps
-          key: ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-deps-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-deps-
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+      - run: mix credo --strict
 
-      - name: Cache build
-        uses: actions/cache@v4
+  dialyzer:
+    name: Dialyzer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        id: setup
         with:
-          path: _build
-          key: ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-build-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-build-
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
 
-      - name: Install dependencies
-        run: mix deps.get --only $MIX_ENV
-
-      - name: Compile (warnings as errors)
-        run: mix compile --warnings-as-errors
-
-      - name: Check formatting
-        run: mix format --check-formatted
-
-      - name: Credo
-        run: mix credo --strict
-
-      - name: Tests
-        run: mix test
-
-      - name: Cache dialyzer PLTs
+      - name: Cache PLTs
         uses: actions/cache@v4
         with:
           path: priv/plts
-          key: ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-plts-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-otp${{ steps.setup.outputs.otp-version }}-elixir${{ steps.setup.outputs.elixir-version }}-plts-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-plts-
+            ${{ runner.os }}-otp${{ steps.setup.outputs.otp-version }}-elixir${{ steps.setup.outputs.elixir-version }}-plts-
 
-      - name: Dialyzer
+      - name: Build PLTs (only on cache miss)
+        run: mix dialyzer --plt
+
+      - name: Run Dialyzer
         run: mix dialyzer --format github

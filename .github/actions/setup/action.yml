@@ -1,0 +1,51 @@
+name: Setup Elixir
+description: Checkout, install Erlang/Elixir, restore deps + build caches, fetch + compile.
+
+inputs:
+  otp-version:
+    description: OTP major version
+    required: true
+  elixir-version:
+    description: Elixir major.minor
+    required: true
+
+outputs:
+  otp-version:
+    description: Resolved OTP version
+    value: ${{ steps.beam.outputs.otp-version }}
+  elixir-version:
+    description: Resolved Elixir version
+    value: ${{ steps.beam.outputs.elixir-version }}
+
+runs:
+  using: composite
+  steps:
+    - uses: erlef/setup-beam@v1
+      id: beam
+      with:
+        otp-version: ${{ inputs.otp-version }}
+        elixir-version: ${{ inputs.elixir-version }}
+
+    - name: Cache deps
+      uses: actions/cache@v4
+      with:
+        path: deps
+        key: ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-deps-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-deps-
+
+    - name: Cache build
+      uses: actions/cache@v4
+      with:
+        path: _build
+        key: ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-build-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-build-
+
+    - name: Install dependencies
+      shell: bash
+      run: mix deps.get --only $MIX_ENV
+
+    - name: Compile
+      shell: bash
+      run: mix compile --warnings-as-errors

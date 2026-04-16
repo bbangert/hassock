@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -61,3 +63,21 @@ jobs:
 
       - name: Run Dialyzer
         run: mix dialyzer --format github
+
+  publish:
+    name: Publish to hex.pm
+    if: github.event_name == 'release'
+    needs: [test, credo, dialyzer]
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+      - name: Publish package and docs
+        run: mix hex.publish --yes
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}

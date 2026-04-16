@@ -99,6 +99,25 @@ defmodule Hassock.IntegrationTest do
     end
   end
 
+  describe "Supervisor" do
+    test "cache: true delivers :ready and loads entities through the supervisor", ctx do
+      conn_name = unique_name("hassock_conn")
+      cache_name = unique_name("hassock_cache")
+
+      {:ok, _sup} =
+        Hassock.Supervisor.start_link(
+          config: ctx.config,
+          cache: true,
+          connection_name: conn_name,
+          cache_name: cache_name
+        )
+
+      assert_receive {:hassock_cache, _cache, :ready}, @timeout
+
+      assert Cache.get_all(cache_name) != []
+    end
+  end
+
   describe "Connection + Cache" do
     test "cache becomes ready and exposes entities", ctx do
       {:ok, conn} = Connection.start_link(config: ctx.config)
@@ -170,6 +189,9 @@ defmodule Hassock.IntegrationTest do
         flunk("Timed out waiting for #{entity_id} to appear in cache changes")
     end
   end
+
+  defp unique_name(prefix),
+    do: :"#{prefix}_#{:erlang.unique_integer([:positive])}"
 
   defp env_config do
     with url when is_binary(url) <- System.get_env("HASSOCK_URL"),

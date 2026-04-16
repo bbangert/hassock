@@ -137,8 +137,7 @@ defmodule Hassock.IntegrationTest do
             target: %{entity_id: light}
           })
 
-        assert_receive {:hassock_cache, ^cache, {:changes, payload}}, @timeout
-        assert Enum.any?(payload.changed, fn {id, _new, _old} -> id == light end)
+        assert_cache_change(cache, light)
 
         # Toggle back
         Process.sleep(300)
@@ -152,6 +151,23 @@ defmodule Hassock.IntegrationTest do
       else
         IO.puts("\n  No light entity available — skipping cache change test")
       end
+    end
+  end
+
+  defp assert_cache_change(cache, entity_id, remaining \\ @timeout) do
+    start = System.monotonic_time(:millisecond)
+
+    receive do
+      {:hassock_cache, ^cache, {:changes, payload}} ->
+        if Enum.any?(payload.changed, fn {id, _, _} -> id == entity_id end) do
+          :ok
+        else
+          elapsed = System.monotonic_time(:millisecond) - start
+          assert_cache_change(cache, entity_id, remaining - elapsed)
+        end
+    after
+      max(remaining, 0) ->
+        flunk("Timed out waiting for #{entity_id} to appear in cache changes")
     end
   end
 

@@ -14,13 +14,14 @@ env:
   MIX_ENV: test
   OTP_VERSION: "28"
   ELIXIR_VERSION: "1.19"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/setup
         with:
           otp-version: ${{ env.OTP_VERSION }}
@@ -32,7 +33,7 @@ jobs:
     name: Credo
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/setup
         with:
           otp-version: ${{ env.OTP_VERSION }}
@@ -43,7 +44,7 @@ jobs:
     name: Dialyzer
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/setup
         id: setup
         with:
@@ -51,7 +52,7 @@ jobs:
           elixir-version: ${{ env.ELIXIR_VERSION }}
 
       - name: Cache PLTs
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: priv/plts
           key: ${{ runner.os }}-otp${{ steps.setup.outputs.otp-version }}-elixir${{ steps.setup.outputs.elixir-version }}-plts-${{ hashFiles('**/mix.lock') }}
@@ -72,7 +73,7 @@ jobs:
     env:
       MIX_ENV: dev
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/setup
         with:
           otp-version: ${{ env.OTP_VERSION }}

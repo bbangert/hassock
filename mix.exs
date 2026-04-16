@@ -1,8 +1,8 @@
 defmodule Hassock.MixProject do
   use Mix.Project
 
-  @version "0.1.1"
-  @source_url "https://github.com/bensheldon/hassock"
+  @version "0.1.2"
+  @source_url "https://github.com/bbangert/hassock"
 
   def project do
     [

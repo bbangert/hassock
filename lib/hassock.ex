@@ -4,9 +4,9 @@ defmodule Hassock do
 
   Two layers, opt-in:
 
-    * `Hassock.Boundary.Connection` — the WebSocket itself. Always required.
-    * `Hassock.Boundary.StateCache` — optional ETS-backed full entity cache,
-      kept in sync via HA's `subscribe_entities` command.
+    * `Hassock.Connection` — the WebSocket itself. Always required.
+    * `Hassock.Cache` — optional ETS-backed full entity cache, kept in sync
+      via HA's `subscribe_entities` command.
 
   Both follow the controlling-process pattern (à la `:gen_tcp`,
   `Circuits.UART`): the process that calls `start_link/1` is the default
@@ -16,7 +16,7 @@ defmodule Hassock do
 
       {:ok, conn} =
         Hassock.connect(
-          config: %Hassock.Core.Config{url: "http://homeassistant.local:8123", token: "..."}
+          config: %Hassock.Config{url: "http://homeassistant.local:8123", token: "..."}
         )
 
       receive do
@@ -26,10 +26,10 @@ defmodule Hassock do
       {:ok, sub} = Hassock.subscribe_entities(conn, ["light.kitchen"])
       # handle {:hassock, ^conn, {:event, {:entities, _}}} in your handle_info/2
 
-  ## With state cache
+  ## With entity cache
 
       {:ok, conn} = Hassock.connect(config: config)
-      {:ok, cache} = Hassock.Boundary.StateCache.start_link(connection: conn)
+      {:ok, cache} = Hassock.Cache.start_link(connection: conn)
 
       receive do
         {:hassock_cache, ^cache, :ready} -> :ok
@@ -38,9 +38,9 @@ defmodule Hassock do
       Hassock.cached_state(cache, "light.kitchen")
   """
 
-  alias Hassock.Boundary.{Connection, StateCache}
+  alias Hassock.{Cache, Connection}
 
-  @doc "Open a WebSocket connection. See `Hassock.Boundary.Connection.start_link/1`."
+  @doc "Open a WebSocket connection. See `Hassock.Connection.start_link/1`."
   defdelegate connect(opts), to: Connection, as: :start_link
 
   @doc "Transfer connection ownership."
@@ -67,12 +67,12 @@ defmodule Hassock do
   @doc "True if the connection is authenticated and the socket is open."
   defdelegate connected?(conn), to: Connection
 
-  @doc "Look up a cached entity by id (requires a `Hassock.Boundary.StateCache`)."
-  defdelegate cached_state(cache, entity_id), to: StateCache, as: :get
+  @doc "Look up a cached entity by id (requires a `Hassock.Cache`)."
+  defdelegate cached_state(cache, entity_id), to: Cache, as: :get
 
   @doc "All cached entities."
-  defdelegate cached_states(cache), to: StateCache, as: :get_all
+  defdelegate cached_states(cache), to: Cache, as: :get_all
 
   @doc "All cached entities under a domain prefix (e.g. `\"light\"`)."
-  defdelegate cached_domain(cache, domain), to: StateCache, as: :get_domain
+  defdelegate cached_domain(cache, domain), to: Cache, as: :get_domain
 end

@@ -1,4 +1,4 @@
-defmodule Hassock.Core.EntityState do
+defmodule Hassock.EntityState do
   @moduledoc """
   A snapshot of a Home Assistant entity's state.
   """

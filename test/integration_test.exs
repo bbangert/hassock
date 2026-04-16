@@ -15,8 +15,7 @@ defmodule Hassock.IntegrationTest do
 
   use ExUnit.Case
 
-  alias Hassock.Boundary.{Connection, StateCache}
-  alias Hassock.Core.{Config, ServiceCall}
+  alias Hassock.{Cache, Config, Connection, ServiceCall}
 
   @moduletag :integration
   @timeout 10_000
@@ -100,15 +99,15 @@ defmodule Hassock.IntegrationTest do
     end
   end
 
-  describe "Connection + StateCache" do
+  describe "Connection + Cache" do
     test "cache becomes ready and exposes entities", ctx do
       {:ok, conn} = Connection.start_link(config: ctx.config)
       assert_receive {:hassock, ^conn, :connected}, @timeout
 
-      {:ok, cache} = StateCache.start_link(connection: conn)
+      {:ok, cache} = Cache.start_link(connection: conn)
       assert_receive {:hassock_cache, ^cache, :ready}, @timeout
 
-      states = StateCache.get_all(cache)
+      states = Cache.get_all(cache)
       assert states != []
       IO.puts("\n  Cache loaded #{length(states)} entities")
     end
@@ -117,13 +116,13 @@ defmodule Hassock.IntegrationTest do
       {:ok, conn} = Connection.start_link(config: ctx.config)
       assert_receive {:hassock, ^conn, :connected}, @timeout
 
-      {:ok, cache} = StateCache.start_link(connection: conn)
+      {:ok, cache} = Cache.start_link(connection: conn)
       assert_receive {:hassock_cache, ^cache, :ready}, @timeout
 
       light =
         ctx.light ||
           cache
-          |> StateCache.get_domain("light")
+          |> Cache.get_domain("light")
           |> List.first()
           |> case do
             nil -> nil

@@ -1,4 +1,4 @@
-defmodule Hassock.Boundary.Connection do
+defmodule Hassock.Connection do
   @moduledoc """
   WebSocket client for Home Assistant.
 
@@ -26,7 +26,7 @@ defmodule Hassock.Boundary.Connection do
   use WebSockex
   require Logger
 
-  alias Hassock.Core.{Config, Messages, ServiceCall}
+  alias Hassock.{Config, Protocol, ServiceCall}
 
   defmodule State do
     @moduledoc false
@@ -49,7 +49,7 @@ defmodule Hassock.Boundary.Connection do
 
   Options:
 
-    * `:config` — `%Hassock.Core.Config{}` (required)
+    * `:config` — `%Hassock.Config{}` (required)
     * `:name` — register the process under this name (optional)
 
   The calling process becomes the controlling process. If `start_link/1`
@@ -125,7 +125,7 @@ defmodule Hassock.Boundary.Connection do
   end
 
   @doc "Fetch a one-shot snapshot of all entity states."
-  @spec get_states(pid | atom) :: {:ok, [Hassock.Core.EntityState.t()]} | {:error, term}
+  @spec get_states(pid | atom) :: {:ok, [Hassock.EntityState.t()]} | {:error, term}
   def get_states(conn) do
     sync_request(conn, {:command, :get_states, :get_states}, @default_timeout)
   end
@@ -157,13 +157,13 @@ defmodule Hassock.Boundary.Connection do
 
   @impl true
   def handle_frame({:text, json}, state) do
-    json |> Messages.parse() |> route(state)
+    json |> Protocol.parse() |> route(state)
   end
 
   def handle_frame(_frame, state), do: {:ok, state}
 
   defp route(:auth_required, state) do
-    {:reply, {:text, Messages.encode_auth(state.config.token)}, state}
+    {:reply, {:text, Protocol.encode_auth(state.config.token)}, state}
   end
 
   defp route(:auth_ok, state) do
@@ -183,16 +183,16 @@ defmodule Hassock.Boundary.Connection do
       {nil, _} ->
         {:ok, state}
 
-      {{from, ref, kind}, pending} ->
-        send(from, {:hassock_response, ref, format_result(kind, id, success, result)})
+      {{ref, kind}, pending} ->
+        reply(ref, format_result(kind, id, success, result))
         {:ok, %{state | pending: pending}}
     end
   end
 
   defp route({:states, id, states}, state) do
     case Map.pop(state.pending, id) do
-      {{from, ref, :get_states}, pending} ->
-        send(from, {:hassock_response, ref, {:ok, states}})
+      {{ref, :get_states}, pending} ->
+        reply(ref, {:ok, states})
         {:ok, %{state | pending: pending}}
 
       _ ->
@@ -202,8 +202,8 @@ defmodule Hassock.Boundary.Connection do
 
   defp route({:services, id, services}, state) do
     case Map.pop(state.pending, id) do
-      {{from, ref, :get_services}, pending} ->
-        send(from, {:hassock_response, ref, {:ok, services}})
+      {{ref, :get_services}, pending} ->
+        reply(ref, {:ok, services})
         {:ok, %{state | pending: pending}}
 
       _ ->
@@ -230,23 +230,23 @@ defmodule Hassock.Boundary.Connection do
   defp route({:unknown, _msg}, state), do: {:ok, state}
 
   @impl true
-  def handle_cast({:sync, request, from, ref}, state) do
-    handle_sync(request, from, ref, state)
+  def handle_cast({:sync, request, ref}, state) do
+    handle_sync(request, ref, state)
   end
 
-  defp handle_sync(:connected?, from, ref, state) do
-    send(from, {:hassock_response, ref, state.authenticated})
+  defp handle_sync(:connected?, ref, state) do
+    reply(ref, state.authenticated)
     {:ok, state}
   end
 
-  defp handle_sync({:set_controlling, caller, new_pid}, from, ref, state) do
+  defp handle_sync({:set_controlling, caller, new_pid}, ref, state) do
     cond do
       state.controlling_pid != caller ->
-        send(from, {:hassock_response, ref, {:error, :not_owner}})
+        reply(ref, {:error, :not_owner})
         {:ok, state}
 
       not Process.alive?(new_pid) ->
-        send(from, {:hassock_response, ref, {:error, :not_alive}})
+        reply(ref, {:error, :not_alive})
         {:ok, state}
 
       true ->
@@ -254,38 +254,38 @@ defmodule Hassock.Boundary.Connection do
           do: Process.demonitor(state.controlling_monitor, [:flush])
 
         monitor = Process.monitor(new_pid)
-        send(from, {:hassock_response, ref, :ok})
+        reply(ref, :ok)
         {:ok, %{state | controlling_pid: new_pid, controlling_monitor: monitor}}
     end
   end
 
-  defp handle_sync({:command, command, kind}, from, ref, state) do
+  defp handle_sync({:command, command, kind}, ref, state) do
     if state.authenticated do
       id = state.next_id
       frame = encode_command(id, command)
-      pending = Map.put(state.pending, id, {from, ref, kind})
+      pending = Map.put(state.pending, id, {ref, kind})
       state = %{state | next_id: id + 1, pending: pending}
       {:reply, {:text, frame}, state}
     else
-      send(from, {:hassock_response, ref, {:error, :not_connected}})
+      reply(ref, {:error, :not_connected})
       {:ok, state}
     end
   end
 
   defp encode_command(id, {:subscribe_events, event_type}),
-    do: Messages.encode_subscribe_events(id, event_type)
+    do: Protocol.encode_subscribe_events(id, event_type)
 
   defp encode_command(id, {:subscribe_entities, entity_ids}),
-    do: Messages.encode_subscribe_entities(id, entity_ids)
+    do: Protocol.encode_subscribe_entities(id, entity_ids)
 
   defp encode_command(id, {:unsubscribe_events, sub_id}),
-    do: Messages.encode_unsubscribe_events(id, sub_id)
+    do: Protocol.encode_unsubscribe_events(id, sub_id)
 
   defp encode_command(id, {:call_service, call}),
-    do: Messages.encode_call_service(id, call)
+    do: Protocol.encode_call_service(id, call)
 
-  defp encode_command(id, :get_states), do: Messages.encode_get_states(id)
-  defp encode_command(id, :get_services), do: Messages.encode_get_services(id)
+  defp encode_command(id, :get_states), do: Protocol.encode_get_states(id)
+  defp encode_command(id, :get_services), do: Protocol.encode_get_services(id)
 
   defp format_result(_kind, _id, false, error), do: {:error, error}
   defp format_result(:subscribe, id, true, _), do: {:ok, id}
@@ -312,8 +312,8 @@ defmodule Hassock.Boundary.Connection do
     Logger.warning("Hassock: disconnected (#{inspect(reason)}), reconnecting...")
     notify(state, {:disconnected, reason})
 
-    Enum.each(state.pending, fn {_id, {from, ref, _kind}} ->
-      send(from, {:hassock_response, ref, {:error, :disconnected}})
+    Enum.each(state.pending, fn {_id, {ref, _kind}} ->
+      reply(ref, {:error, :disconnected})
     end)
 
     {:reconnect, %{state | authenticated: false, pending: %{}, next_id: 1}}
@@ -327,13 +327,23 @@ defmodule Hassock.Boundary.Connection do
     send(pid, {:hassock, self(), payload})
   end
 
+  # Send a sync reply through a `:reply_demonitor` alias ref. If the caller
+  # has already timed out and deactivated the alias, the runtime silently
+  # drops this message — no orphaned response piles up in their mailbox.
+  defp reply(ref, response), do: send(ref, {:hassock_response, ref, response})
+
+  # Ref-correlated request against a non-GenServer WebSockex process.
+  # The monitor doubles as a process alias (`:reply_demonitor`) so that:
+  #   - the caller can `send/2` directly to `ref` from Connection,
+  #   - after the reply fires, the alias auto-deactivates (one-shot),
+  #   - on timeout, demonitor+flush deactivates the alias and drains `:DOWN`,
+  # ensuring late replies are discarded rather than leaking into the mailbox.
   defp sync_request(conn, request, timeout) do
-    ref = Process.monitor(conn_pid(conn))
-    WebSockex.cast(conn, {:sync, request, self(), ref})
+    ref = Process.monitor(conn_pid(conn), alias: :reply_demonitor)
+    WebSockex.cast(conn, {:sync, request, ref})
 
     receive do
       {:hassock_response, ^ref, response} ->
-        Process.demonitor(ref, [:flush])
         response
 
       {:DOWN, ^ref, :process, _, reason} ->

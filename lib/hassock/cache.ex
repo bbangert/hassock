@@ -1,16 +1,16 @@
-defmodule Hassock.Boundary.StateCache do
+defmodule Hassock.Cache do
   @moduledoc """
   Optional ETS-backed cache of all Home Assistant entity states.
 
-  Subscribes the underlying `Connection` to every entity using HA's
+  Subscribes the underlying `Hassock.Connection` to every entity using HA's
   `subscribe_entities` command. The first event payload contains the full
   initial snapshot; later payloads ship compressed `a`/`c`/`r` deltas
   including newly created and deleted entities. ETS is kept in sync.
 
   ## Ownership
 
-  Starting a `StateCache` for a `Connection` **transfers ownership of that
-  connection to the cache** (`Hassock.Boundary.Connection.controlling_process/2`).
+  Starting a cache for a connection **transfers ownership of that
+  connection to the cache** (`Hassock.Connection.controlling_process/2`).
   The transfer is performed inside `start_link/1` itself — so the process
   that calls `start_link/1` must currently own the connection.
 
@@ -34,8 +34,7 @@ defmodule Hassock.Boundary.StateCache do
   use GenServer
   require Logger
 
-  alias Hassock.Boundary.Connection
-  alias Hassock.Core.EntityState
+  alias Hassock.{Connection, EntityState}
 
   defmodule State do
     @moduledoc false
@@ -57,7 +56,7 @@ defmodule Hassock.Boundary.StateCache do
 
   Options:
 
-    * `:connection` — pid or registered name of a `Hassock.Boundary.Connection` (required)
+    * `:connection` — pid or registered name of a `Hassock.Connection` (required)
     * `:controlling_pid` — pid that should receive cache events (default: caller)
     * `:name` — register the cache under this name (optional)
     * `:table_name` — explicit ETS table name (optional)
@@ -216,7 +215,7 @@ defmodule Hassock.Boundary.StateCache do
         %State{controlling_monitor: ref} = state
       ) do
     Logger.warning(
-      "Hassock.StateCache: controller died; cache events dropped until new owner set"
+      "Hassock.Cache: controller died; cache events dropped until new owner set"
     )
 
     {:noreply, %{state | controlling_pid: nil, controlling_monitor: nil}}
@@ -232,7 +231,7 @@ defmodule Hassock.Boundary.StateCache do
         {:ok, %{state | subscription_id: sub_id, ready: false}}
 
       {:error, reason} ->
-        Logger.error("Hassock.StateCache: subscribe_entities failed: #{inspect(reason)}")
+        Logger.error("Hassock.Cache: subscribe_entities failed: #{inspect(reason)}")
         :error
     end
   end
@@ -242,7 +241,7 @@ defmodule Hassock.Boundary.StateCache do
       :ets.insert(state.table, {entity_id, es})
     end)
 
-    Logger.info("Hassock.StateCache: loaded #{map_size(added)} entities")
+    Logger.info("Hassock.Cache: loaded #{map_size(added)} entities")
     notify(state, :ready)
 
     rest = %{payload | added: %{}}

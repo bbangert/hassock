@@ -1,10 +1,9 @@
-defmodule Hassock.Core.Messages do
+defmodule Hassock.Protocol do
   @moduledoc """
   Pure functions for parsing and encoding Home Assistant WebSocket frames.
 
-  No side effects, no processes — data in, data out. The `Connection`
-  boundary uses these to translate between JSON on the wire and tagged
-  Elixir terms.
+  No side effects, no processes — data in, data out. `Hassock.Connection`
+  uses these to translate between JSON on the wire and tagged Elixir terms.
 
   ## HA WebSocket protocol summary
 
@@ -25,7 +24,7 @@ defmodule Hassock.Core.Messages do
   - `call_service`, `get_states`, `get_services`, `ping`
   """
 
-  alias Hassock.Core.{EntityState, ServiceCall}
+  alias Hassock.{EntityState, ServiceCall}
 
   # -- Parsing --
 

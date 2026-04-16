@@ -1,7 +1,7 @@
-defmodule Hassock.Core.ConfigTest do
+defmodule Hassock.ConfigTest do
   use ExUnit.Case, async: true
 
-  alias Hassock.Core.Config
+  alias Hassock.Config
 
   describe "websocket_url/1" do
     test "converts http to ws" do

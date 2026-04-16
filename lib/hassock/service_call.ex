@@ -1,4 +1,4 @@
-defmodule Hassock.Core.ServiceCall do
+defmodule Hassock.ServiceCall do
   @moduledoc """
   A request to call a Home Assistant service.
   """

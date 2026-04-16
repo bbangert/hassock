@@ -1,4 +1,4 @@
-defmodule Hassock.Core.Config do
+defmodule Hassock.Config do
   @moduledoc """
   Configuration for connecting to a Home Assistant instance.
   """

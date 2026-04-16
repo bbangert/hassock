@@ -131,7 +131,7 @@ defmodule Hassock.Cache do
 
   @impl true
   def init(opts) do
-    connection = Keyword.fetch!(opts, :connection)
+    connection = resolve_connection(Keyword.fetch!(opts, :connection))
     controlling_pid = Keyword.fetch!(opts, :controlling_pid)
 
     table_name =
@@ -222,6 +222,12 @@ defmodule Hassock.Cache do
   def handle_info(_msg, state), do: {:noreply, state}
 
   # -- Internals --
+
+  defp resolve_connection(pid) when is_pid(pid), do: pid
+
+  defp resolve_connection(name) when is_atom(name) do
+    Process.whereis(name) || raise ArgumentError, "#{inspect(name)} is not a registered process"
+  end
 
   defp start_subscription(state) do
     case Connection.subscribe_entities(state.connection, nil) do

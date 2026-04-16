@@ -214,9 +214,7 @@ defmodule Hassock.Cache do
         {:DOWN, ref, :process, _pid, _reason},
         %State{controlling_monitor: ref} = state
       ) do
-    Logger.warning(
-      "Hassock.Cache: controller died; cache events dropped until new owner set"
-    )
+    Logger.warning("Hassock.Cache: controller died; cache events dropped until new owner set")
 
     {:noreply, %{state | controlling_pid: nil, controlling_monitor: nil}}
   end

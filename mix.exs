@@ -8,7 +8,7 @@ defmodule Hassock.MixProject do
     [
       app: :hassock,
       version: @version,
-      elixir: "~> 1.17",
+      elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: "Home Assistant WebSocket client for Elixir.",

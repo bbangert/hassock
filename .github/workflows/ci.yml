@@ -107,6 +107,9 @@ jobs:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
           cache-key: audit
+      # The setup action fetches only MIX_ENV's deps; --check-unused needs
+      # every env's deps (ex_doc's are :dev-only) or it flags them as unused.
+      - run: mix deps.get
       - run: mix hex.audit
       - run: mix deps.unlock --check-unused
 

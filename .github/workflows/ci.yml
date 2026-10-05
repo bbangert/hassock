@@ -16,7 +16,24 @@ env:
   ELIXIR_VERSION: "1.20"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Every gate runs as its own parallel job; each passes its job name as the
+# setup action's cache-key so parallel jobs don't race to save one cache.
 jobs:
+  compile-format:
+    name: Compile · Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/setup
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          cache-key: compile
+      # --force: a restored _build would otherwise skip unchanged modules and
+      # hide their warnings.
+      - run: mix compile --warnings-as-errors --force
+      - run: mix format --check-formatted
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -26,7 +43,7 @@ jobs:
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
-      - run: mix format --check-formatted
+          cache-key: test
       - run: mix test
 
   credo:
@@ -38,7 +55,21 @@ jobs:
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
+          cache-key: credo
       - run: mix credo --strict
+
+  sobelow:
+    name: Sobelow
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/setup
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          cache-key: sobelow
+      # --private skips sobelow's external version check.
+      - run: mix sobelow --private --skip --exit --threshold medium
 
   dialyzer:
     name: Dialyzer
@@ -50,6 +81,7 @@ jobs:
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
+          cache-key: dialyzer
 
       - name: Cache PLTs
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -64,6 +96,56 @@ jobs:
 
       - name: Run Dialyzer
         run: mix dialyzer --format github
+
+  audit:
+    name: Hex audit · Unused deps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/setup
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          cache-key: audit
+      - run: mix hex.audit
+      - run: mix deps.unlock --check-unused
+
+  argus:
+    name: Argus
+    runs-on: ubuntu-24.04
+    # Souffle's PPA package depends on libffi7, which Ubuntu 24.04 no longer
+    # ships; the Install Souffle step adds a checksum-pinned libffi7 first.
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Souffle
+        run: |
+          # Souffle's PPA package links against libffi7, which Ubuntu 24.04
+          # dropped; install the Ubuntu 20.04 build (checksum-pinned) first.
+          curl -fsSLo /tmp/libffi7.deb http://archive.ubuntu.com/ubuntu/pool/main/libf/libffi/libffi7_3.3-4_amd64.deb
+          echo "4584aa8fef1bf5086168ce2f7078cd2ebd78fdc4cc0d86d958d795d4e0b0f50d  /tmp/libffi7.deb" | sha256sum -c -
+          sudo apt-get install -y /tmp/libffi7.deb
+          sudo wget https://souffle-lang.github.io/ppa/souffle-key.public -O /usr/share/keyrings/souffle-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/souffle-archive-keyring.gpg] https://souffle-lang.github.io/ppa/ubuntu/ stable main" | sudo tee /etc/apt/sources.list.d/souffle.list
+          sudo apt-get update
+          sudo apt-get install -y souffle
+
+      - uses: ./.github/actions/setup
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          cache-key: argus-u2404
+
+      # Compile first so build output never mixes into the JSON report.
+      - run: mix compile
+
+      # No file-level ignores: every finding must be fixed or carry a reviewed
+      # entry in .argus-baseline.exs (see scripts/argus_baseline.exs).
+      - run: mix argus --format json > argus.json
+
+      - run: elixir scripts/argus_baseline.exs --self-test
+
+      - run: elixir scripts/argus_baseline.exs argus.json .argus-baseline.exs
 
   publish:
     name: Publish to hex.pm

@@ -8,6 +8,10 @@ inputs:
   elixir-version:
     description: Elixir major.minor
     required: true
+  cache-key:
+    description: Per-job prefix for the deps/_build cache keys, so parallel jobs don't race to save the same cache
+    required: false
+    default: mix
 
 outputs:
   otp-version:
@@ -30,17 +34,17 @@ runs:
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: deps
-        key: ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-deps-${{ hashFiles('**/mix.lock') }}
+        key: ${{ runner.os }}-${{ inputs.cache-key }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-deps-${{ hashFiles('**/mix.lock') }}
         restore-keys: |
-          ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-deps-
+          ${{ runner.os }}-${{ inputs.cache-key }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-deps-
 
     - name: Cache build
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: _build
-        key: ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-build-${{ hashFiles('**/mix.lock') }}
+        key: ${{ runner.os }}-${{ inputs.cache-key }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-build-${{ hashFiles('**/mix.lock') }}
         restore-keys: |
-          ${{ runner.os }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-build-
+          ${{ runner.os }}-${{ inputs.cache-key }}-otp${{ steps.beam.outputs.otp-version }}-elixir${{ steps.beam.outputs.elixir-version }}-build-
 
     - name: Install dependencies
       shell: bash

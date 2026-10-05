@@ -1,10 +1,1 @@
-{
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "packageRules": [
-    {
-      "matchManagers": ["github-actions"],
-      "pinDigests": true
-    }
-  ]
-}
+{"$schema": "https://docs.renovatebot.com/renovate-schema.json", "enabled": false}

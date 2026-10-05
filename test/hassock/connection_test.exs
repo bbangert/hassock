@@ -8,7 +8,8 @@ defmodule Hassock.ConnectionTest do
   # directly, so the test process plays the connection and `controller`
   # plays the controlling process.
   setup do
-    controller = spawn_link(fn -> Process.sleep(:infinity) end)
+    controller = spawn(fn -> Process.sleep(:infinity) end)
+    on_exit(fn -> Process.exit(controller, :kill) end)
     %{controller: controller}
   end
 

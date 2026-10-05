@@ -147,8 +147,12 @@ defmodule Hassock.Connection do
 
   # -- WebSockex callbacks --
 
+  # handle_connect/2 runs again on every reconnect. Monitor the controller
+  # only when no monitor is held yet, so reconnects don't stack a fresh
+  # monitor on the same process each time.
   @impl true
-  def handle_connect(_conn, %State{controlling_pid: pid} = state) when is_pid(pid) do
+  def handle_connect(_conn, %State{controlling_pid: pid, controlling_monitor: nil} = state)
+      when is_pid(pid) do
     monitor = Process.monitor(pid)
     {:ok, %{state | controlling_monitor: monitor}}
   end

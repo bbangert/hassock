@@ -153,7 +153,7 @@ jobs:
   publish:
     name: Publish to hex.pm
     if: github.event_name == 'release'
-    needs: [test, credo, dialyzer]
+    needs: [compile-format, test, credo, sobelow, dialyzer, audit, argus]
     runs-on: ubuntu-latest
     env:
       MIX_ENV: dev

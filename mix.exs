@@ -29,7 +29,7 @@ defmodule Hassock.MixProject do
 
   defp deps do
     [
-      {:websockex, "~> 0.4.3"},
+      {:websockex, "~> 0.5"},
       {:jason, "~> 1.4"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

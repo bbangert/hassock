@@ -52,6 +52,9 @@ defmodule Hassock do
   @doc "Subscribe to a non-entity HA event type."
   defdelegate subscribe_events(conn, event_type), to: Connection
 
+  @doc "Subscribe to a rendered template; see `Hassock.Connection.subscribe_template/3`."
+  defdelegate subscribe_template(conn, template, opts \\ []), to: Connection
+
   @doc "Cancel a subscription."
   defdelegate unsubscribe_events(conn, subscription_id), to: Connection
 
@@ -66,6 +69,12 @@ defmodule Hassock do
 
   @doc "True if the connection is authenticated and the socket is open."
   defdelegate connected?(conn), to: Connection
+
+  @doc "List Lovelace (card-based) dashboards; built-in panels are not included."
+  defdelegate lovelace_dashboards(conn), to: Connection
+
+  @doc "Fetch a Lovelace dashboard config; `nil` url_path is the default dashboard."
+  defdelegate lovelace_config(conn, url_path, opts \\ []), to: Connection
 
   @doc "Look up a cached entity by id (requires a `Hassock.Cache`)."
   defdelegate cached_state(cache, entity_id), to: Cache, as: :get

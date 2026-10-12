@@ -15,6 +15,7 @@ defmodule Hassock.Connection do
     * `{:state_changed, new_state, old_state}` — from `subscribe_events("state_changed")`
     * `{:entities, %{added: _, changed: _, removed: _}}` — from `subscribe_entities/2`
     * `{:other, event_type, raw_event}` — from any other `subscribe_events/2` type
+    * `{:template, subscription_id, payload}` — from `subscribe_template/3`
 
   Use `controlling_process/2` to transfer ownership to a different pid.
 
@@ -36,11 +37,16 @@ defmodule Hassock.Connection do
       :controlling_monitor,
       next_id: 1,
       pending: %{},
+      templates: MapSet.new(),
       authenticated: false
     ]
   end
 
   @default_timeout 10_000
+
+  # Commands whose results skip Protocol's shape detection. A dashboard
+  # config is an arbitrary map and can look like a get_services result.
+  @raw_result_kinds [:lovelace_dashboards, :lovelace_config]
 
   # -- Public API --
 
@@ -108,12 +114,39 @@ defmodule Hassock.Connection do
     )
   end
 
-  @doc "Cancel a subscription returned by `subscribe_entities/2` or `subscribe_events/2`."
+  @doc """
+  Subscribe to a rendered Home Assistant template. HA renders it right away
+  and again whenever an entity or time it depends on changes; each render
+  arrives as `{:hassock, conn, {:event, {:template, subscription_id,
+  payload}}}`, where payload is `%{result: _, listeners: _}` or, with
+  `report_errors: true`, `%{error: _, level: _}`.
+
+  Options: `:variables`, `:timeout`, `:strict`, `:report_errors`; see
+  `Hassock.Protocol.encode_render_template/3`. A template that fails to
+  compile returns `{:error, %{"code" => "template_error", ...}}`.
+
+  `Hassock.Cache` drops template events, so subscribe on a connection your
+  own process controls. Like other subscriptions, it ends when the socket
+  drops; subscribe again after the next `:connected`.
+  """
+  @spec subscribe_template(pid | atom, String.t(), keyword) :: {:ok, integer} | {:error, term}
+  def subscribe_template(conn, template, opts \\ []) when is_binary(template) do
+    sync_request(
+      conn,
+      {:command, {:render_template, template, opts}, :subscribe_template},
+      @default_timeout
+    )
+  end
+
+  @doc """
+  Cancel a subscription returned by `subscribe_entities/2`,
+  `subscribe_events/2`, or `subscribe_template/3`.
+  """
   @spec unsubscribe_events(pid | atom, integer) :: :ok | {:error, term}
   def unsubscribe_events(conn, subscription_id) when is_integer(subscription_id) do
     sync_request(
       conn,
-      {:command, {:unsubscribe_events, subscription_id}, :unsubscribe},
+      {:command, {:unsubscribe_events, subscription_id}, {:unsubscribe, subscription_id}},
       @default_timeout
     )
   end
@@ -134,6 +167,49 @@ defmodule Hassock.Connection do
   @spec get_services(pid | atom) :: {:ok, %{String.t() => [String.t()]}} | {:error, term}
   def get_services(conn) do
     sync_request(conn, {:command, :get_services, :get_services}, @default_timeout)
+  end
+
+  @doc """
+  List the dashboards HA stores or loads from YAML.
+
+  These are Lovelace dashboards, HA's internal name for its configurable,
+  card-based dashboards. Built-in panels such as Energy, History, and
+  Logbook are not Lovelace dashboards and are not listed.
+
+  Recent HA versions list the default dashboard as `"lovelace"`; older ones
+  and YAML setups may leave it out. `lovelace_config(conn, nil)` fetches it
+  either way.
+  """
+  @spec lovelace_dashboards(pid | atom) :: {:ok, [map]} | {:error, term}
+  def lovelace_dashboards(conn) do
+    sync_request(
+      conn,
+      {:command, :lovelace_dashboards, :lovelace_dashboards},
+      @default_timeout
+    )
+  end
+
+  @doc """
+  Fetch the config (views and cards) of one dashboard.
+
+  `url_path` is the dashboard's `url_path` from `lovelace_dashboards/1`, or
+  `nil` for the default dashboard. Options:
+
+    * `:force` — make HA reload a YAML dashboard from disk (default `false`)
+
+  An auto-generated dashboard returns `%{"strategy" => %{"type" => ...}}`
+  instead of views. A dashboard with no config at all gives an error whose
+  `"code"` is `"config_not_found"`.
+  """
+  @spec lovelace_config(pid | atom, String.t() | nil, keyword) :: {:ok, map} | {:error, term}
+  def lovelace_config(conn, url_path, opts \\ []) do
+    force = Keyword.get(opts, :force, false)
+
+    sync_request(
+      conn,
+      {:command, {:lovelace_config, url_path, force}, :lovelace_config},
+      @default_timeout
+    )
   end
 
   @doc "True if authenticated and the underlying socket is connected."
@@ -161,10 +237,29 @@ defmodule Hassock.Connection do
 
   @impl true
   def handle_frame({:text, json}, state) do
-    json |> Protocol.parse() |> route(state)
+    json
+    |> Protocol.parse(
+      raw_result?: &raw_result?(state, &1),
+      template_event?: &template_event?(state, &1)
+    )
+    |> route(state)
   end
 
   def handle_frame(_frame, state), do: {:ok, state}
+
+  defp raw_result?(state, id) do
+    case Map.get(state.pending, id) do
+      {_ref, kind} -> kind in @raw_result_kinds
+      nil -> false
+    end
+  end
+
+  # HA can send a template's error events before the subscribe result, so
+  # a still-pending subscribe counts too.
+  defp template_event?(state, id) do
+    MapSet.member?(state.templates, id) or
+      match?({_ref, :subscribe_template}, Map.get(state.pending, id))
+  end
 
   defp route(:auth_required, state) do
     {:reply, {:text, Protocol.encode_auth(state.config.token)}, state}
@@ -189,7 +284,7 @@ defmodule Hassock.Connection do
 
       {{ref, kind}, pending} ->
         reply(ref, format_result(kind, id, success, result))
-        {:ok, %{state | pending: pending}}
+        {:ok, track_template(%{state | pending: pending}, kind, id, success)}
     end
   end
 
@@ -230,8 +325,21 @@ defmodule Hassock.Connection do
     {:ok, state}
   end
 
+  defp route({:template, id, payload}, state) do
+    notify(state, {:event, {:template, id, payload}})
+    {:ok, state}
+  end
+
   defp route(:pong, state), do: {:ok, state}
   defp route({:unknown, _msg}, state), do: {:ok, state}
+
+  defp track_template(state, :subscribe_template, id, true),
+    do: %{state | templates: MapSet.put(state.templates, id)}
+
+  defp track_template(state, {:unsubscribe, sub_id}, _id, true),
+    do: %{state | templates: MapSet.delete(state.templates, sub_id)}
+
+  defp track_template(state, _kind, _id, _success), do: state
 
   @impl true
   def handle_cast({:sync, request, ref}, state) do
@@ -291,9 +399,18 @@ defmodule Hassock.Connection do
   defp encode_command(id, :get_states), do: Protocol.encode_get_states(id)
   defp encode_command(id, :get_services), do: Protocol.encode_get_services(id)
 
+  defp encode_command(id, {:render_template, template, opts}),
+    do: Protocol.encode_render_template(id, template, opts)
+
+  defp encode_command(id, :lovelace_dashboards), do: Protocol.encode_lovelace_dashboards(id)
+
+  defp encode_command(id, {:lovelace_config, url_path, force}),
+    do: Protocol.encode_lovelace_config(id, url_path, force)
+
   defp format_result(_kind, _id, false, error), do: {:error, error}
   defp format_result(:subscribe, id, true, _), do: {:ok, id}
-  defp format_result(:unsubscribe, _id, true, _), do: :ok
+  defp format_result(:subscribe_template, id, true, _), do: {:ok, id}
+  defp format_result({:unsubscribe, _sub_id}, _id, true, _), do: :ok
   defp format_result(:call_service, _id, true, result), do: {:ok, result}
   defp format_result(_kind, _id, true, result), do: {:ok, result}
 
@@ -320,7 +437,8 @@ defmodule Hassock.Connection do
       reply(ref, {:error, :disconnected})
     end)
 
-    {:reconnect, %{state | authenticated: false, pending: %{}, next_id: 1}}
+    {:reconnect,
+     %{state | authenticated: false, pending: %{}, templates: MapSet.new(), next_id: 1}}
   end
 
   # -- Internals --

@@ -99,6 +99,28 @@ Cache messages:
 > connection, for async events. (Synchronous calls like `call_service/2` and
 > `get_states/1` still work directly on `conn`.)
 
+### Dashboards
+
+Read the dashboard list and a dashboard's views and cards. These commands
+cover Lovelace dashboards, HA's internal name for its configurable,
+card-based dashboards: Overview and the ones you add yourself. Built-in
+panels such as Energy, History, and Logbook are separate frontend pages and
+are not included.
+
+```elixir
+{:ok, dashboards} = Hassock.lovelace_dashboards(conn)
+# [%{"url_path" => "dashboard-energy", "title" => "Energy", "mode" => "storage", ...}]
+
+{:ok, config} = Hassock.lovelace_config(conn, "dashboard-energy")
+{:ok, default} = Hassock.lovelace_config(conn, nil)
+```
+
+Recent HA versions list the default dashboard as `"lovelace"`; older ones
+and YAML setups may leave it out. Passing `nil` fetches it either way. An
+auto-generated dashboard returns `%{"strategy" => %{"type" => ...}}` instead
+of views; a dashboard with no config at all gives
+`{:error, %{"code" => "config_not_found", ...}}`.
+
 ### Hand off message reception
 
 ```elixir

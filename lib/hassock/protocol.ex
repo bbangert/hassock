@@ -22,6 +22,8 @@ defmodule Hassock.Protocol do
   - `subscribe_entities` — efficient targeted entity subscription
   - `unsubscribe_events` — cancel any subscription
   - `call_service`, `get_states`, `get_services`, `ping`
+  - `lovelace/dashboards/list`, `lovelace/config` — dashboard listing and config
+  - `render_template` — subscribe to a rendered template
   """
 
   alias Hassock.{EntityState, ServiceCall}
@@ -44,6 +46,16 @@ defmodule Hassock.Protocol do
           removed: %{optional(:attributes) => [String.t()]}
         }
 
+  @typedoc """
+  A `render_template` event. `result` is whatever the template renders to:
+  HA turns output that parses as a number, list, or map into that type.
+  `listeners` says what HA watches to re-render it. Error events only arrive
+  when the subscription asked for `report_errors: true`.
+  """
+  @type template_payload ::
+          %{result: term(), listeners: map()}
+          | %{error: String.t(), level: String.t()}
+
   @type parsed ::
           :auth_required
           | :auth_ok
@@ -54,18 +66,53 @@ defmodule Hassock.Protocol do
           | {:event, integer(), String.t(), map()}
           | {:states, integer(), [EntityState.t()]}
           | {:services, integer(), %{String.t() => [String.t()]}}
+          | {:template, integer(), template_payload()}
           | :pong
           | {:unknown, map()}
 
   @doc """
   Parse a raw JSON string from the HA WebSocket into a tagged term.
+
+  Options:
+
+    * `:raw_result?` — a 1-arity function called with a result's `id`. When
+      it returns `true`, the result is returned as `{:result, id, success,
+      result}` without shape detection. Use it for commands whose payload
+      could be mistaken for a `get_states` or `get_services` result, such as
+      a dashboard config.
+    * `:template_event?` — a 1-arity function called with an event's `id`.
+      When it returns `true`, the event is parsed as a `render_template`
+      event. Template events carry no `event_type`, so without this they are
+      indistinguishable from `subscribe_entities` events.
   """
-  @spec parse(String.t()) :: parsed()
-  def parse(json) do
-    json
-    |> Jason.decode!()
-    |> parse_decoded()
+  @spec parse(String.t(), keyword) :: parsed()
+  def parse(json, opts \\ []) do
+    raw_result? = Keyword.get(opts, :raw_result?, fn _id -> false end)
+    template_event? = Keyword.get(opts, :template_event?, fn _id -> false end)
+
+    case Jason.decode!(json) do
+      %{"type" => "result", "id" => id} = msg ->
+        if raw_result?.(id), do: parse_raw_result(msg), else: parse_decoded(msg)
+
+      %{"type" => "event", "id" => id, "event" => %{} = event} = msg ->
+        if template_event?.(id), do: parse_template_event(id, event), else: parse_decoded(msg)
+
+      msg ->
+        parse_decoded(msg)
+    end
   end
+
+  defp parse_template_event(id, %{"error" => error} = event),
+    do: {:template, id, %{error: error, level: Map.get(event, "level", "ERROR")}}
+
+  defp parse_template_event(id, event),
+    do: {:template, id, %{result: event["result"], listeners: Map.get(event, "listeners", %{})}}
+
+  defp parse_raw_result(%{"id" => id, "success" => true} = msg),
+    do: {:result, id, true, Map.get(msg, "result")}
+
+  defp parse_raw_result(%{"id" => id} = msg),
+    do: {:result, id, false, Map.get(msg, "error")}
 
   defp parse_decoded(%{"type" => "auth_required"}), do: :auth_required
   defp parse_decoded(%{"type" => "auth_ok"}), do: :auth_ok
@@ -268,6 +315,38 @@ defmodule Hassock.Protocol do
       if call.service_data != %{}, do: Map.put(msg, :service_data, call.service_data), else: msg
 
     Jason.encode!(msg)
+  end
+
+  @doc "Encode a `lovelace/dashboards/list` command."
+  @spec encode_lovelace_dashboards(integer()) :: String.t()
+  def encode_lovelace_dashboards(id),
+    do: Jason.encode!(%{id: id, type: "lovelace/dashboards/list"})
+
+  @doc """
+  Encode a `lovelace/config` command. A `nil` `url_path` asks for the default
+  dashboard. `force: true` makes HA reload a YAML dashboard from disk.
+  """
+  @spec encode_lovelace_config(integer(), String.t() | nil, boolean()) :: String.t()
+  def encode_lovelace_config(id, url_path, force \\ false) do
+    msg = %{id: id, type: "lovelace/config", force: force}
+    msg = if url_path, do: Map.put(msg, :url_path, url_path), else: msg
+    Jason.encode!(msg)
+  end
+
+  @doc """
+  Encode a `render_template` command. Options: `:variables` (map),
+  `:timeout` (seconds; HA rejects the template if a test render takes
+  longer), `:strict` (error on undefined variables), and `:report_errors`
+  (send render errors as events).
+  """
+  @spec encode_render_template(integer(), String.t(), keyword) :: String.t()
+  def encode_render_template(id, template, opts \\ []) do
+    optional =
+      opts
+      |> Keyword.take([:variables, :timeout, :strict, :report_errors])
+      |> Map.new()
+
+    Jason.encode!(Map.merge(optional, %{id: id, type: "render_template", template: template}))
   end
 
   @doc "Encode a `ping` command."

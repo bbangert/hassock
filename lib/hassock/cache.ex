@@ -275,31 +275,17 @@ defmodule Hassock.Cache do
     state
   end
 
-  defp apply_change(table, entity_id, %{added: added_keys, removed: removed_keys}) do
+  defp apply_change(table, entity_id, diff) do
     case :ets.lookup(table, entity_id) do
       [] ->
         nil
 
       [{^entity_id, %EntityState{} = current}] ->
-        attrs = current.attributes
-        attrs = drop_attrs(attrs, removed_keys)
-        attrs = Map.merge(attrs, Map.get(added_keys, :attributes, %{}))
-
-        new_state = %EntityState{
-          entity_id: entity_id,
-          state: Map.get(added_keys, :state, current.state),
-          attributes: attrs,
-          last_changed: Map.get(added_keys, :last_changed, current.last_changed),
-          last_updated: Map.get(added_keys, :last_updated, current.last_updated)
-        }
-
+        new_state = EntityState.apply_diff(current, diff)
         :ets.insert(table, {entity_id, new_state})
         {entity_id, new_state, current}
     end
   end
-
-  defp drop_attrs(attrs, %{attributes: keys}) when is_list(keys), do: Map.drop(attrs, keys)
-  defp drop_attrs(attrs, _), do: attrs
 
   defp notify(%State{controlling_pid: nil}, _payload), do: :ok
 

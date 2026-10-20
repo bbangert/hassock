@@ -1,0 +1,457 @@
+[
+  {
+    "area_id": "area_6",
+    "config_entries": [
+      "entry0000000000000000000000000001"
+    ],
+    "config_entries_subentries": {
+      "entry0000000000000000000000000001": [
+        null
+      ]
+    },
+    "config_entry_id": "entry0000000000000000000000000001",
+    "config_subentry_id": null,
+    "configuration_url": "http://device.invalid/",
+    "connections": [
+      [
+        "upnp",
+        "00:00:00:00:00:00"
+      ],
+      [
+        "mac",
+        "00:00:00:00:00:00"
+      ]
+    ],
+    "created_at": 0.0,
+    "disabled_by": null,
+    "entry_type": null,
+    "hw_version": null,
+    "id": "device0000000000000000000000000001",
+    "identifiers": [
+      [
+        "sonos",
+        "identifier_1"
+      ]
+    ],
+    "labels": [],
+    "manufacturer": "Manufacturer 1",
+    "model": "Model 1",
+    "model_id": "model_1",
+    "modified_at": 1759440487.207387,
+    "name": "Device 1",
+    "name_by_user": null,
+    "next_name_part": "Part 1",
+    "parent_device_id": null,
+    "primary_config_entry": "entry0000000000000000000000000001",
+    "serial_number": null,
+    "sw_version": "1.0",
+    "via_device_id": null
+  },
+  {
+    "area_id": null,
+    "config_entries": [
+      "entry0000000000000000000000000002"
+    ],
+    "config_entries_subentries": {
+      "entry0000000000000000000000000002": [
+        null
+      ]
+    },
+    "config_entry_id": "entry0000000000000000000000000002",
+    "config_subentry_id": null,
+    "configuration_url": "http://device.invalid/",
+    "connections": [],
+    "created_at": 0.0,
+    "disabled_by": null,
+    "entry_type": "service",
+    "hw_version": null,
+    "id": "device0000000000000000000000000002",
+    "identifiers": [
+      [
+        "hassio",
+        "identifier_2"
+      ]
+    ],
+    "labels": [],
+    "manufacturer": "Manufacturer 2",
+    "model": "Model 2",
+    "model_id": null,
+    "modified_at": 1791467864.891628,
+    "name": "Device 2",
+    "name_by_user": null,
+    "next_name_part": null,
+    "parent_device_id": null,
+    "primary_config_entry": "entry0000000000000000000000000002",
+    "serial_number": null,
+    "sw_version": "1.0",
+    "via_device_id": null
+  },
+  {
+    "area_id": null,
+    "config_entries": [
+      "entry0000000000000000000000000002"
+    ],
+    "config_entries_subentries": {
+      "entry0000000000000000000000000002": [
+        null
+      ]
+    },
+    "config_entry_id": "entry0000000000000000000000000002",
+    "config_subentry_id": null,
+    "configuration_url": null,
+    "connections": [],
+    "created_at": 0.0,
+    "disabled_by": null,
+    "entry_type": "service",
+    "hw_version": null,
+    "id": "device0000000000000000000000000003",
+    "identifiers": [
+      [
+        "hassio",
+        "identifier_3"
+      ]
+    ],
+    "labels": [],
+    "manufacturer": "Manufacturer 3",
+    "model": "Model 3",
+    "model_id": null,
+    "modified_at": 1791381142.507446,
+    "name": "Device 3",
+    "name_by_user": null,
+    "next_name_part": null,
+    "parent_device_id": null,
+    "primary_config_entry": "entry0000000000000000000000000002",
+    "serial_number": null,
+    "sw_version": "1.0",
+    "via_device_id": null
+  },
+  {
+    "area_id": "area_5",
+    "config_entries": [
+      "entry0000000000000000000000000003"
+    ],
+    "config_entries_subentries": {
+      "entry0000000000000000000000000003": [
+        null
+      ]
+    },
+    "config_entry_id": "entry0000000000000000000000000003",
+    "config_subentry_id": null,
+    "configuration_url": null,
+    "connections": [],
+    "created_at": 0.0,
+    "disabled_by": null,
+    "entry_type": null,
+    "hw_version": null,
+    "id": "device0000000000000000000000000004",
+    "identifiers": [
+      [
+        "zwave_js",
+        "identifier_4"
+      ],
+      [
+        "zwave_js",
+        "identifier_5"
+      ]
+    ],
+    "labels": [],
+    "manufacturer": "Manufacturer 4",
+    "model": "Model 4",
+    "model_id": null,
+    "modified_at": 1752085821.225499,
+    "name": "Device 4",
+    "name_by_user": "Device 5",
+    "next_name_part": "Part 1",
+    "parent_device_id": null,
+    "primary_config_entry": "entry0000000000000000000000000003",
+    "serial_number": null,
+    "sw_version": "1.0",
+    "via_device_id": "device0000000000000000000000000005"
+  },
+  {
+    "area_id": "area_4",
+    "config_entries": [
+      "entry0000000000000000000000000003"
+    ],
+    "config_entries_subentries": {
+      "entry0000000000000000000000000003": [
+        null
+      ]
+    },
+    "config_entry_id": "entry0000000000000000000000000003",
+    "config_subentry_id": null,
+    "configuration_url": null,
+    "connections": [],
+    "created_at": 0.0,
+    "disabled_by": null,
+    "entry_type": null,
+    "hw_version": null,
+    "id": "device0000000000000000000000000006",
+    "identifiers": [
+      [
+        "zwave_js",
+        "identifier_6"
+      ],
+      [
+        "zwave_js",
+        "identifier_7"
+      ]
+    ],
+    "labels": [],
+    "manufacturer": "Manufacturer 5",
+    "model": "Model 5",
+    "model_id": null,
+    "modified_at": 1752085821.277073,
+    "name": "Device 6",
+    "name_by_user": "Device 7",
+    "next_name_part": "Part 1",
+    "parent_device_id": null,
+    "primary_config_entry": "entry0000000000000000000000000003",
+    "serial_number": null,
+    "sw_version": "1.0",
+    "via_device_id": "device0000000000000000000000000005"
+  },
+  {
+    "area_id": "area_3",
+    "config_entries": [
+      "entry0000000000000000000000000003"
+    ],
+    "config_entries_subentries": {
+      "entry0000000000000000000000000003": [
+        null
+      ]
+    },
+    "config_entry_id": "entry0000000000000000000000000003",
+    "config_subentry_id": null,
+    "configuration_url": null,
+    "connections": [],
+    "created_at": 0.0,
+    "disabled_by": null,
+    "entry_type": null,
+    "hw_version": null,
+    "id": "device0000000000000000000000000007",
+    "identifiers": [
+      [
+        "zwave_js",
+        "identifier_8"
+      ],
+      [
+        "zwave_js",
+        "identifier_9"
+      ]
+    ],
+    "labels": [],
+    "manufacturer": "Manufacturer 6",
+    "model": "Model 6",
+    "model_id": null,
+    "modified_at": 1752085821.376476,
+    "name": "Device 8",
+    "name_by_user": "Device 9",
+    "next_name_part": "Part 1",
+    "parent_device_id": null,
+    "primary_config_entry": "entry0000000000000000000000000003",
+    "serial_number": null,
+    "sw_version": "1.0",
+    "via_device_id": "device0000000000000000000000000005"
+  },
+  {
+    "area_id": null,
+    "config_entries": [
+      "entry0000000000000000000000000002"
+    ],
+    "config_entries_subentries": {
+      "entry0000000000000000000000000002": [
+        null
+      ]
+    },
+    "config_entry_id": "entry0000000000000000000000000002",
+    "config_subentry_id": null,
+    "configuration_url": "http://device.invalid/",
+    "connections": [],
+    "created_at": 0.0,
+    "disabled_by": null,
+    "entry_type": "service",
+    "hw_version": null,
+    "id": "device0000000000000000000000000008",
+    "identifiers": [
+      [
+        "hassio",
+        "identifier_10"
+      ]
+    ],
+    "labels": [],
+    "manufacturer": "Manufacturer 2",
+    "model": "Model 2",
+    "model_id": null,
+    "modified_at": 1792434072.295818,
+    "name": "Device 10",
+    "name_by_user": null,
+    "next_name_part": null,
+    "parent_device_id": null,
+    "primary_config_entry": "entry0000000000000000000000000002",
+    "serial_number": null,
+    "sw_version": "1.0",
+    "via_device_id": null
+  },
+  {
+    "area_id": "area_7",
+    "config_entries": [
+      "entry0000000000000000000000000004"
+    ],
+    "config_entries_subentries": {
+      "entry0000000000000000000000000004": [
+        null
+      ]
+    },
+    "config_entry_id": "entry0000000000000000000000000004",
+    "config_subentry_id": null,
+    "configuration_url": "http://device.invalid/",
+    "connections": [],
+    "created_at": 0.0,
+    "disabled_by": "user",
+    "entry_type": null,
+    "hw_version": null,
+    "id": "device0000000000000000000000000009",
+    "identifiers": [
+      [
+        "hunterdouglas_powerview",
+        "identifier_11"
+      ]
+    ],
+    "labels": [],
+    "manufacturer": "Manufacturer 7",
+    "model": "Model 7",
+    "model_id": null,
+    "modified_at": 1728248221.371254,
+    "name": "Device 11",
+    "name_by_user": null,
+    "next_name_part": "Part 1",
+    "parent_device_id": null,
+    "primary_config_entry": "entry0000000000000000000000000004",
+    "serial_number": null,
+    "sw_version": "1.0",
+    "via_device_id": "device0000000000000000000000000010"
+  },
+  {
+    "area_id": "area_4",
+    "config_entries": [
+      "entry0000000000000000000000000004"
+    ],
+    "config_entries_subentries": {
+      "entry0000000000000000000000000004": [
+        null
+      ]
+    },
+    "config_entry_id": "entry0000000000000000000000000004",
+    "config_subentry_id": null,
+    "configuration_url": "http://device.invalid/",
+    "connections": [],
+    "created_at": 0.0,
+    "disabled_by": null,
+    "entry_type": null,
+    "hw_version": null,
+    "id": "device0000000000000000000000000011",
+    "identifiers": [
+      [
+        "hunterdouglas_powerview",
+        "identifier_12"
+      ]
+    ],
+    "labels": [],
+    "manufacturer": "Manufacturer 7",
+    "model": "Model 7",
+    "model_id": null,
+    "modified_at": 0.0,
+    "name": "Device 12",
+    "name_by_user": null,
+    "next_name_part": "Part 1",
+    "parent_device_id": null,
+    "primary_config_entry": "entry0000000000000000000000000004",
+    "serial_number": null,
+    "sw_version": "1.0",
+    "via_device_id": "device0000000000000000000000000010"
+  },
+  {
+    "area_id": "area_2",
+    "config_entries": [
+      "entry0000000000000000000000000005"
+    ],
+    "config_entries_subentries": {
+      "entry0000000000000000000000000005": [
+        null
+      ]
+    },
+    "config_entry_id": "entry0000000000000000000000000005",
+    "config_subentry_id": null,
+    "configuration_url": null,
+    "connections": [
+      [
+        "mac",
+        "00:00:00:00:00:00"
+      ]
+    ],
+    "created_at": 0.0,
+    "disabled_by": null,
+    "entry_type": null,
+    "hw_version": "1.0",
+    "id": "device0000000000000000000000000012",
+    "identifiers": [],
+    "labels": [],
+    "manufacturer": "Manufacturer 8",
+    "model": "Model 8",
+    "model_id": null,
+    "modified_at": 1758764463.951747,
+    "name": "Device 13",
+    "name_by_user": "Device 14",
+    "next_name_part": "Part 1",
+    "parent_device_id": null,
+    "primary_config_entry": "entry0000000000000000000000000005",
+    "serial_number": null,
+    "sw_version": "1.0",
+    "via_device_id": null
+  },
+  {
+    "area_id": "area_4",
+    "config_entries": [
+      "entry0000000000000000000000000004"
+    ],
+    "config_entries_subentries": {
+      "entry0000000000000000000000000004": [
+        null
+      ]
+    },
+    "config_entry_id": "entry0000000000000000000000000004",
+    "config_subentry_id": null,
+    "configuration_url": "http://device.invalid/",
+    "connections": [
+      [
+        "mac",
+        "00:00:00:00:00:00"
+      ]
+    ],
+    "created_at": 0.0,
+    "disabled_by": null,
+    "entry_type": null,
+    "hw_version": "1.0",
+    "id": "device0000000000000000000000000010",
+    "identifiers": [
+      [
+        "hunterdouglas_powerview",
+        "identifier_13"
+      ]
+    ],
+    "labels": [],
+    "manufacturer": "Manufacturer 7",
+    "model": "Model 9",
+    "model_id": null,
+    "modified_at": 1754613007.27405,
+    "name": "Device 15",
+    "name_by_user": null,
+    "next_name_part": "Part 1",
+    "parent_device_id": null,
+    "primary_config_entry": "entry0000000000000000000000000004",
+    "serial_number": null,
+    "sw_version": "1.0",
+    "via_device_id": null
+  }
+]

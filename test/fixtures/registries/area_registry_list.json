@@ -1,0 +1,67 @@
+[
+  {
+    "aliases": [],
+    "area_id": "area_1",
+    "created_at": 0.0,
+    "floor_id": "floor_1",
+    "humidity_entity_id": null,
+    "icon": null,
+    "labels": [],
+    "modified_at": 1766423167.095791,
+    "name": "Area 1",
+    "picture": null,
+    "temperature_entity_id": null
+  },
+  {
+    "aliases": [],
+    "area_id": "area_2",
+    "created_at": 0.0,
+    "floor_id": "floor_1",
+    "humidity_entity_id": null,
+    "icon": null,
+    "labels": [],
+    "modified_at": 1766423159.516137,
+    "name": "Area 2",
+    "picture": null,
+    "temperature_entity_id": null
+  },
+  {
+    "aliases": [],
+    "area_id": "area_3",
+    "created_at": 0.0,
+    "floor_id": "floor_2",
+    "humidity_entity_id": "sensor.entity_2",
+    "icon": "mdi:garage",
+    "labels": [],
+    "modified_at": 1767412999.13367,
+    "name": "Area 3",
+    "picture": null,
+    "temperature_entity_id": "sensor.entity_1"
+  },
+  {
+    "aliases": [],
+    "area_id": "area_4",
+    "created_at": 0.0,
+    "floor_id": "floor_2",
+    "humidity_entity_id": null,
+    "icon": null,
+    "labels": [],
+    "modified_at": 1749483862.454062,
+    "name": "Area 4",
+    "picture": null,
+    "temperature_entity_id": null
+  },
+  {
+    "aliases": [],
+    "area_id": "area_5",
+    "created_at": 0.0,
+    "floor_id": "floor_2",
+    "humidity_entity_id": "sensor.entity_4",
+    "icon": null,
+    "labels": [],
+    "modified_at": 1766700354.243532,
+    "name": "Area 5",
+    "picture": null,
+    "temperature_entity_id": "sensor.entity_3"
+  }
+]

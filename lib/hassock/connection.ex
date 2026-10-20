@@ -361,6 +361,12 @@ defmodule Hassock.Connection do
 
   def handle_info({:expire, id}, state) do
     case Map.fetch(state.pending, id) do
+      # HA answers pings but not this restore: re-make the connection, which
+      # keeps the subscription and restores it again.
+      {:ok, {nil, {:resubscribe, sub_id}, _timer}} ->
+        Logger.warning("Hassock: restoring subscription #{sub_id} timed out, reconnecting")
+        {:noreply, socket_down(:resubscribe_timeout, kill_socket(state))}
+
       {:ok, {ref, kind, _timer}} ->
         if ref, do: reply(ref, {:error, :timeout})
         {:noreply, cancel_pending(state, id, kind)}
@@ -542,8 +548,9 @@ defmodule Hassock.Connection do
     end
   end
 
-  # The unsubscribe is done; no more events can come for this id.
-  defp handle_result({kind, ha_id}, _id, _success, _result, ref, state)
+  # The unsubscribe is done; no more events can come for this id. On
+  # failure the id stays retired, so its events are still dropped.
+  defp handle_result({kind, ha_id}, _id, true, _result, ref, state)
        when kind in [:unsubscribe, :retire] do
     if ref, do: reply(ref, :ok)
     %{state | retired: MapSet.delete(state.retired, ha_id)}
@@ -570,7 +577,7 @@ defmodule Hassock.Connection do
   end
 
   defp handle_result(:get_services, _id, true, result, ref, state) when is_map(result) do
-    reply(ref, {:ok, Protocol.decode_services(result)})
+    reply(ref, decode_services(result))
     state
   end
 
@@ -583,6 +590,12 @@ defmodule Hassock.Connection do
   defp handle_result(_kind, _id, true, result, ref, state) do
     if ref, do: reply(ref, {:ok, result})
     state
+  end
+
+  defp decode_services(result) do
+    if Enum.all?(Map.values(result), &is_map/1),
+      do: {:ok, Protocol.decode_services(result)},
+      else: {:error, {:unexpected_result, result}}
   end
 
   # -- Sync requests --
@@ -693,9 +706,10 @@ defmodule Hassock.Connection do
   defp send_command(state, type, payload, ref, kind, timeout) do
     id = state.next_id
     send_text(state, Protocol.encode_command(id, type, payload))
-    # Outlive the caller's own timeout, so the caller is the one that gives
-    # up; this only cleans up after callers that died while waiting.
-    timer = Process.send_after(self(), {:expire, id}, timeout + 1_000)
+    # With a caller, outlive its own timeout so the caller is the one that
+    # gives up; this then only cleans up after callers that died waiting.
+    timeout = if ref, do: timeout + 1_000, else: timeout
+    timer = Process.send_after(self(), {:expire, id}, timeout)
     %{state | next_id: id + 1, pending: Map.put(state.pending, id, {ref, kind, timer})}
   end
 
@@ -787,8 +801,8 @@ defmodule Hassock.Connection do
     Enum.reduce(state.subscriptions, state, fn {sub_id, sub}, acc ->
       id = acc.next_id
 
-      acc =
-        send_command(acc, sub.type, sub.payload, nil, {:resubscribe, sub_id}, @default_timeout)
+      kind = {:resubscribe, sub_id}
+      acc = send_command(acc, sub.type, sub.payload, nil, kind, acc.config.connect_timeout)
 
       %{
         acc

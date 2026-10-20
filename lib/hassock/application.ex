@@ -5,6 +5,9 @@ defmodule Hassock.Application do
 
   @impl true
   def start(_type, _args) do
-    Supervisor.start_link([], strategy: :one_for_one, name: Hassock.Supervisor.Root)
+    Supervisor.start_link([Hassock.TableRef],
+      strategy: :one_for_one,
+      name: Hassock.Supervisor.Root
+    )
   end
 end

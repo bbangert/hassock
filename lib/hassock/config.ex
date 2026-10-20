@@ -24,7 +24,9 @@ defmodule Hassock.Config do
     * `:backoff_initial` / `:backoff_max` - reconnect delay bounds in ms
       (default `1_000` / `30_000`); see `Hassock.Connection.Backoff`
     * `:connect_timeout` - ms from the start of a connection attempt to
-      `auth_ok` before the attempt is abandoned (default `15_000`)
+      `auth_ok` before the attempt is abandoned, and ms HA gets to answer
+      each subscription restore before the connection is re-made
+      (default `15_000`)
 
   `inspect/1` leaves out `:token` and `:ssl_options`, so they don't end up
   in logs or crash reports.

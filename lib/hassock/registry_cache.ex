@@ -35,15 +35,20 @@ defmodule Hassock.RegistryCache do
     @moduledoc false
     defstruct [
       :connection,
-      :name,
       :table,
       :controlling_pid,
       :controlling_monitor,
       :debounce,
       :retry,
-      # the running list task: {task_ref, :load | {:relist, kind}}
+      # the running list task: {task_ref, :load | {:relist, kind}, generation}
       :task,
       :load_timer,
+      # bumped on every :connected and :disconnected, so a task result from
+      # an earlier session can be told apart from a current one
+      generation: 0,
+      # subscription ids lost while a task was running; its result mustn't
+      # add them back
+      lost: MapSet.new(),
       connected: false,
       ready: false,
       # a full load is due once the running task finishes
@@ -117,7 +122,8 @@ defmodule Hassock.RegistryCache do
 
   @impl true
   def init(opts) do
-    # Trap exits so terminate/2 runs and unregisters the table.
+    # Trap exits so a crashing list task arrives as :DOWN instead of taking
+    # the cache down with it.
     Process.flag(:trap_exit, true)
     controlling_pid = Keyword.fetch!(opts, :controlling_pid)
     name = Keyword.get(opts, :name)
@@ -126,7 +132,6 @@ defmodule Hassock.RegistryCache do
 
     state = %State{
       connection: Keyword.fetch!(opts, :connection),
-      name: name,
       table: table,
       controlling_pid: controlling_pid,
       controlling_monitor: Process.monitor(controlling_pid),
@@ -166,11 +171,11 @@ defmodule Hassock.RegistryCache do
 
   @impl true
   def handle_info({:hassock, _conn, :connected}, state) do
-    {:noreply, want_load(%{state | connected: true})}
+    {:noreply, want_load(%{state | connected: true, generation: state.generation + 1})}
   end
 
   def handle_info({:hassock, _conn, {:disconnected, _reason}}, state) do
-    {:noreply, %{state | connected: false, ready: false}}
+    {:noreply, %{state | connected: false, ready: false, generation: state.generation + 1}}
   end
 
   def handle_info({:hassock, _conn, {:event, {:registry_updated, kind, _action, _id}}}, state) do
@@ -181,7 +186,8 @@ defmodule Hassock.RegistryCache do
   # re-list, since its updates may have been missed.
   def handle_info({:hassock, _conn, {:subscription_lost, sub_id, _error}}, state) do
     subscribed = Map.reject(state.subscribed, fn {_type, id} -> id == sub_id end)
-    {:noreply, want_load(%{state | subscribed: subscribed, ready: false})}
+    lost = if state.task, do: MapSet.put(state.lost, sub_id), else: state.lost
+    {:noreply, want_load(%{state | subscribed: subscribed, lost: lost, ready: false})}
   end
 
   def handle_info({:relist, kind}, state) do
@@ -202,14 +208,17 @@ defmodule Hassock.RegistryCache do
       else: {:noreply, state}
   end
 
-  def handle_info({ref, result}, %State{task: {ref, job}} = state) do
+  def handle_info({ref, result}, %State{task: {ref, job, generation}} = state) do
     Process.demonitor(ref, [:flush])
-    {:noreply, %{state | task: nil} |> finish(job, result) |> next_task()}
+    {:noreply, %{state | task: nil} |> finish(job, generation, result) |> next_task()}
   end
 
-  def handle_info({:DOWN, ref, :process, _pid, reason}, %State{task: {ref, job}} = state) do
+  def handle_info(
+        {:DOWN, ref, :process, _pid, reason},
+        %State{task: {ref, job, generation}} = state
+      ) do
     result = {:error, {:task_crashed, reason}}
-    {:noreply, %{state | task: nil} |> finish(job, result) |> next_task()}
+    {:noreply, %{state | task: nil} |> finish(job, generation, result) |> next_task()}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, _reason}, %State{controlling_monitor: ref} = state) do
@@ -222,9 +231,6 @@ defmodule Hassock.RegistryCache do
 
   def handle_info(_msg, state), do: {:noreply, state}
 
-  @impl true
-  def terminate(_reason, state), do: TableRef.unregister(__MODULE__, state.name)
-
   # -- Tasks --
 
   defp want_load(%State{task: nil} = state), do: start_task(%{state | load_wanted: false}, :load)
@@ -235,7 +241,7 @@ defmodule Hassock.RegistryCache do
     parent = self()
     missing = Enum.reject(Protocol.registry_event_types(), &Map.has_key?(state.subscribed, &1))
     task = Task.async(fn -> run(job, conn, parent, missing) end)
-    %{state | task: {task.ref, job}}
+    %{state | task: {task.ref, job, state.generation}}
   end
 
   # A full load supersedes queued re-lists.
@@ -278,11 +284,24 @@ defmodule Hassock.RegistryCache do
     end)
   end
 
-  defp finish(state, job, {:error, _} = error), do: apply_result(state, job, error)
+  # Subscriptions the task made are kept whatever the outcome (minus any
+  # lost meanwhile); its data only if the session it read from is current.
+  defp finish(state, job, generation, result) do
+    {subscribed, result} =
+      case result do
+        {:error, _} = error -> {%{}, error}
+        {subscribed, result} -> {subscribed, result}
+      end
 
-  defp finish(state, job, {subscribed, result}) do
-    state = %{state | subscribed: Map.merge(state.subscribed, subscribed)}
-    apply_result(state, job, result)
+    kept = Map.reject(subscribed, fn {_type, id} -> MapSet.member?(state.lost, id) end)
+    state = %{state | subscribed: Map.merge(state.subscribed, kept), lost: MapSet.new()}
+
+    if generation == state.generation do
+      apply_result(state, job, result)
+    else
+      Logger.debug("Hassock.RegistryCache: dropping a result from a previous connection")
+      state
+    end
   end
 
   defp apply_result(state, :load, {:ok, lists}) do

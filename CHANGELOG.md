@@ -43,7 +43,9 @@ These change behaviour for 0.2 code:
   instead of retrying in a tight loop, and `{:disconnected, reason}` is sent
   once per outage instead of once per attempt. The backoff resets once a
   connection has stayed up for `backoff_max`.
-- An attempt that hasn't authenticated within 15 s is abandoned.
+- An attempt that hasn't authenticated within 15 s is abandoned, and a
+  subscription restore HA doesn't answer within that time re-makes the
+  connection.
 - Subscriptions are restored after every reconnect and keep their ids.
   Code that resubscribes on `:connected` now gets duplicate subscriptions;
   remove it.

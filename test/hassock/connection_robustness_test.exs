@@ -271,6 +271,19 @@ defmodule Hassock.ConnectionRobustnessTest do
       refute_receive {:fake_ha, ^sock3, %{"type" => "subscribe_events"}}, 200
     end
 
+    test "a restore HA never answers re-makes the connection and keeps the subscription" do
+      %{conn: conn, sock: sock} = connect(connect_timeout: 200)
+      {_sub_id, _} = subscribe(conn, sock, &Hassock.subscribe_events(&1, "x"))
+
+      FakeHA.close(sock)
+      sock2 = await_auth(conn)
+      assert_receive {:fake_ha, ^sock2, %{"type" => "subscribe_events"}}, 1_000
+
+      assert_receive {:hassock, ^conn, {:disconnected, :resubscribe_timeout}}, 1_000
+      sock3 = await_auth(conn)
+      assert_receive {:fake_ha, ^sock3, %{"type" => "subscribe_events"}}, 1_000
+    end
+
     test "a subscribe that completes after the caller timed out is cancelled" do
       %{conn: conn, sock: sock} = connect()
 
@@ -303,6 +316,33 @@ defmodule Hassock.ConnectionRobustnessTest do
 
       assert_receive {:fake_ha, ^sock, %{"type" => "unsubscribe_events", "subscription" => ^id}},
                      1_000
+    end
+  end
+
+  describe "failed unsubscribes" do
+    test "events of a :to subscriber whose unsubscribe failed stay dropped" do
+      %{conn: conn, sock: sock} = connect()
+      test = self()
+
+      subscriber =
+        spawn(fn ->
+          send(test, {:subscribed, Hassock.subscribe_events(conn, "x", to: self())})
+          receive do: (:stop -> :ok)
+        end)
+
+      assert_receive {:fake_ha, ^sock, %{"type" => "subscribe_events", "id" => id}}, 1_000
+      FakeHA.result(sock, id, nil)
+      assert_receive {:subscribed, {:ok, ^id}}
+
+      send(subscriber, :stop)
+
+      assert_receive {:fake_ha, ^sock,
+                      %{"type" => "unsubscribe_events", "subscription" => ^id, "id" => unsub}},
+                     1_000
+
+      FakeHA.error(sock, unsub, "home_assistant_error", "busy")
+      FakeHA.event(sock, id, %{event_type: "x", data: %{}})
+      refute_receive {:hassock, ^conn, {:event, _}}, 100
     end
   end
 

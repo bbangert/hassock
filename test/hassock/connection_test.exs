@@ -83,6 +83,13 @@ defmodule Hassock.ConnectionTest do
       assert Hassock.connected?(conn)
     end
 
+    test "get_services reports a domain whose services aren't a map", %{conn: conn, sock: sock} do
+      {task, %{"id" => id}} = call_async(fn -> Hassock.get_services(conn) end)
+      FakeHA.result(sock, id, %{"light" => nil})
+      assert {:error, {:unexpected_result, %{"light" => nil}}} = Task.await(task)
+      assert Hassock.connected?(conn)
+    end
+
     test "get_states decodes an empty list", %{conn: conn, sock: sock} do
       {task, %{"id" => id}} = call_async(fn -> Hassock.get_states(conn) end)
       FakeHA.result(sock, id, [])

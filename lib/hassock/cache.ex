@@ -47,7 +47,6 @@ defmodule Hassock.Cache do
     @moduledoc false
     defstruct [
       :table,
-      :name,
       :connection,
       :controlling_pid,
       :controlling_monitor,
@@ -144,8 +143,6 @@ defmodule Hassock.Cache do
 
   @impl true
   def init(opts) do
-    # Trap exits so terminate/2 runs and unregisters the table.
-    Process.flag(:trap_exit, true)
     connection = resolve_connection(Keyword.fetch!(opts, :connection))
     name = Keyword.get(opts, :name)
     controlling_pid = Keyword.fetch!(opts, :controlling_pid)
@@ -163,7 +160,6 @@ defmodule Hassock.Cache do
 
     state = %State{
       table: table,
-      name: name,
       retry: Keyword.get(opts, :retry, 5_000),
       connection: connection,
       controlling_pid: controlling_pid,
@@ -256,9 +252,6 @@ defmodule Hassock.Cache do
   end
 
   def handle_info(_msg, state), do: {:noreply, state}
-
-  @impl true
-  def terminate(_reason, state), do: TableRef.unregister(__MODULE__, state.name)
 
   # -- Internals --
 

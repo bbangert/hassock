@@ -177,4 +177,47 @@ defmodule Hassock.RegistryCacheTest do
     serve(sock, 10)
     assert_receive {:hassock_registry, ^cache, :ready}, 2_000
   end
+
+  test "drops a load result that arrives after the connection went away",
+       %{conn: conn, sock: sock} do
+    {:ok, cache} = RegistryCache.start_link(connection: conn)
+    serve(sock, 5)
+
+    # The connection drops while the lists are in flight; their results
+    # reach the cache after it heard about it.
+    send(cache, {:hassock, conn, {:disconnected, :closed}})
+    serve(sock, 5)
+    refute_receive {:hassock_registry, ^cache, :ready}, 200
+
+    send(cache, {:hassock, conn, :connected})
+    assert serve(sock, 5) |> Enum.all?(&is_binary/1)
+    assert_receive {:hassock_registry, ^cache, :ready}, 1_000
+  end
+
+  test "a subscription lost during a load isn't added back by its result",
+       %{conn: conn, sock: sock} do
+    {:ok, cache} = RegistryCache.start_link(connection: conn)
+    area_sub = serve(sock, 5) |> sub_id("area_registry_updated")
+
+    send(cache, {:hassock, conn, {:subscription_lost, area_sub, %{"code" => "x"}}})
+    serve(sock, 5)
+
+    # The next load subscribes to that event type again.
+    assert [{:subscribe, "area_registry_updated", _} | lists] = serve(sock, 6)
+    assert Enum.all?(lists, &is_binary/1)
+    assert_receive {:hassock_registry, ^cache, :ready}, 1_000
+  end
+
+  test "a killed cache leaves no table registration behind", ctx do
+    {cache, _seen} = start_cache(ctx, name: :registry_cache_killed)
+    Process.unlink(cache)
+    Process.exit(cache, :kill)
+
+    wait_until(fn ->
+      Registry.lookup(Hassock.TableRef, {RegistryCache, cache}) == [] and
+        Registry.lookup(Hassock.TableRef, {RegistryCache, :registry_cache_killed}) == []
+    end)
+
+    assert RegistryCache.list(cache, :floor) == []
+  end
 end

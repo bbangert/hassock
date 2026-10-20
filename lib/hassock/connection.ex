@@ -79,6 +79,7 @@ defmodule Hassock.Connection do
       # tags the current ping/pong timer messages, so stale ones are ignored
       :ping_ref,
       :connect_timer,
+      :connect_ref,
       :connected_at,
       :auth_error,
       status: :connecting,
@@ -349,7 +350,7 @@ defmodule Hassock.Connection do
     {:noreply, socket_down(:ping_timeout, kill_socket(state))}
   end
 
-  def handle_info({:connect_timeout, socket}, %State{socket: socket, status: status} = state)
+  def handle_info({:connect_timeout, ref}, %State{connect_ref: ref, status: status} = state)
       when status in [:connecting, :authenticating] do
     Logger.warning("Hassock: not authenticated within #{state.config.connect_timeout} ms")
     {:noreply, socket_down(:connect_timeout, kill_socket(state))}
@@ -389,10 +390,9 @@ defmodule Hassock.Connection do
   defp connect(state) do
     case Socket.start_link(state.url, self(), state.ws_opts) do
       {:ok, socket} ->
-        timer =
-          Process.send_after(self(), {:connect_timeout, socket}, state.config.connect_timeout)
-
-        %{state | socket: socket, status: :connecting, connect_timer: timer}
+        ref = make_ref()
+        timer = Process.send_after(self(), {:connect_timeout, ref}, state.config.connect_timeout)
+        %{state | socket: socket, status: :connecting, connect_timer: timer, connect_ref: ref}
 
       {:error, reason} ->
         socket_down(reason, state)
@@ -850,7 +850,7 @@ defmodule Hassock.Connection do
 
   defp cancel_connect_timer(state) do
     Process.cancel_timer(state.connect_timer)
-    %{state | connect_timer: nil}
+    %{state | connect_timer: nil, connect_ref: nil}
   end
 
   # -- Internals --

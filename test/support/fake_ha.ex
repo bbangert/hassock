@@ -54,7 +54,9 @@ defmodule Hassock.FakeHA do
     receive do
       {:DOWN, ^ref, _, _, _} -> :ok
     after
-      5_000 -> raise "FakeHA server didn't stop"
+      5_000 ->
+        Process.demonitor(ref, [:flush])
+        raise "FakeHA server didn't stop"
     end
   end
 

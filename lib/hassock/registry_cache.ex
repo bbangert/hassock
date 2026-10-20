@@ -236,7 +236,12 @@ defmodule Hassock.RegistryCache do
   defp want_load(%State{task: nil} = state), do: start_task(%{state | load_wanted: false}, :load)
   defp want_load(state), do: %{state | load_wanted: true}
 
-  defp start_task(state, job) do
+  # A full load means the table isn't known to be current until it
+  # finishes, so a failed attempt must still schedule a retry.
+  defp start_task(state, :load = job), do: do_start_task(%{state | ready: false}, job)
+  defp start_task(state, job), do: do_start_task(state, job)
+
+  defp do_start_task(state, job) do
     conn = state.connection
     parent = self()
     missing = Enum.reject(Protocol.registry_event_types(), &Map.has_key?(state.subscribed, &1))

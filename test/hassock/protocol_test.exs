@@ -220,6 +220,47 @@ defmodule Hassock.ProtocolTest do
     end
   end
 
+  describe "parse/1 — malformed fields" do
+    defp event(event), do: Jason.encode!(%{type: "event", id: 3, event: event})
+
+    test "a registry event whose data isn't a map is passed through as a plain event" do
+      assert {:event, 3, "area_registry_updated", _} =
+               Protocol.parse(event(%{event_type: "area_registry_updated", data: 42}))
+    end
+
+    test "a state_changed event whose new_state isn't a map is passed through" do
+      json = event(%{event_type: "state_changed", data: %{entity_id: "x.y", new_state: 5}})
+      assert {:event, 3, "state_changed", _} = Protocol.parse(json)
+    end
+
+    test "a state_changed event with a malformed old_state keeps old_state nil" do
+      json =
+        event(%{
+          event_type: "state_changed",
+          data: %{entity_id: "x.y", new_state: %{state: "on"}, old_state: 5}
+        })
+
+      assert {:state_changed, 3, %EntityState{state: "on"}, nil} = Protocol.parse(json)
+    end
+
+    test "entities events drop fields of the wrong type" do
+      assert {:entities, 3, %{added: %{}, changed: %{}, removed: []}} =
+               Protocol.parse(event(%{a: 5, c: "x", r: 7}))
+
+      assert {:entities, 3, %{added: added, changed: changed, removed: ["light.b"]}} =
+               Protocol.parse(
+                 event(%{
+                   a: %{"light.bad" => 5, "light.ok" => %{s: "on", a: 9}},
+                   c: %{"light.bad" => 5, "light.c" => %{"+" => %{s: "off", a: 1}, "-" => 3}},
+                   r: ["light.b", 4]
+                 })
+               )
+
+      assert %{"light.ok" => %EntityState{state: "on", attributes: %{}}} = added
+      assert %{"light.c" => %{added: %{state: "off"}, removed: %{}}} = changed
+    end
+  end
+
   describe "parse/1 — registry events" do
     for {type, kind, key} <- [
           {"floor_registry_updated", :floor, "floor_id"},

@@ -303,6 +303,16 @@ defmodule Hassock.ConnectionRobustnessTest do
       refute_receive {:fake_ha, ^sock2, %{"type" => "subscribe_events"}}, 200
     end
 
+    test "a subscribe HA never answers re-makes the connection after a grace period" do
+      %{conn: conn, sock: sock} = connect(connect_timeout: 200)
+
+      assert {:error, :timeout} = Hassock.subscribe_events(conn, "x", timeout: 50)
+      assert_receive {:fake_ha, ^sock, %{"type" => "subscribe_events"}}
+
+      assert_receive {:hassock, ^conn, {:disconnected, :subscribe_timeout}}, 1_000
+      await_auth(conn)
+    end
+
     test "a subscribe whose caller died is cancelled after the expiry" do
       %{conn: conn, sock: sock} = connect()
 

@@ -8,7 +8,7 @@
     title: "Async task never awaited",
     at_label: "task started here",
     detail:
-      "Hassock.RegistryCache.start_task/2 starts a task with Task.async (or async_nolink) but nothing awaits or yields it. Task.async links to the caller and always sends a result message: a crashing task takes the caller down, and completed results accumulate unread in the mailbox.",
+      "Hassock.RegistryCache.do_start_task/2 starts a task with Task.async (or async_nolink) but nothing awaits or yields it. Task.async links to the caller and always sends a result message: a crashing task takes the caller down, and completed results accumulate unread in the mailbox.",
     reason:
       "False positive: the task's result is consumed in handle_info({ref, result}, %State{task: {ref, job}}), the pattern the Task docs give for tasks started from a GenServer, which also demonitors with :flush. The cache traps exits and handles the task's :DOWN (crash) the same way, so a crashing task is reported as a failed load/re-list and retried rather than taking the cache down. At most one task runs at a time (state.task)."
   },

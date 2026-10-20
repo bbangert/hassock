@@ -167,7 +167,7 @@ defmodule Hassock.Connection do
   `payload` is merged into the message next to `id` and `type`:
 
       Hassock.command(conn, "config/area_registry/list")
-      Hassock.command(conn, "render_template", %{template: "{{ now() }}"}, timeout: 5_000)
+      Hassock.command(conn, "config/entity_registry/get", %{entity_id: "light.kitchen"}, timeout: 5_000)
 
   Returns `{:ok, result}`, `{:error, %{"code" => _, "message" => _}}` for an
   HA error, or `{:error, :not_connected | :disconnected | :timeout}`.
@@ -361,6 +361,11 @@ defmodule Hassock.Connection do
 
   def handle_info({:expire, id}, state) do
     case Map.fetch(state.pending, id) do
+      # Its caller gave up and HA still hasn't answered after a grace period.
+      {:ok, {nil, {:cancelled, _kind}, _timer}} ->
+        Logger.warning("Hassock: HA never answered subscription request #{id}, reconnecting")
+        {:noreply, socket_down(:subscribe_timeout, kill_socket(state))}
+
       # HA answers pings but not this restore: re-make the connection, which
       # keeps the subscription and restores it again.
       {:ok, {nil, {:resubscribe, sub_id}, _timer}} ->
@@ -572,7 +577,7 @@ defmodule Hassock.Connection do
   end
 
   defp handle_result(:get_states, _id, true, result, ref, state) when is_list(result) do
-    reply(ref, {:ok, Protocol.decode_states(result)})
+    reply(ref, decode_states(result))
     state
   end
 
@@ -590,6 +595,12 @@ defmodule Hassock.Connection do
   defp handle_result(_kind, _id, true, result, ref, state) do
     if ref, do: reply(ref, {:ok, result})
     state
+  end
+
+  defp decode_states(result) do
+    if Enum.all?(result, &match?(%{"entity_id" => id} when is_binary(id), &1)),
+      do: {:ok, Protocol.decode_states(result)},
+      else: {:error, {:unexpected_result, result}}
   end
 
   defp decode_services(result) do
@@ -786,15 +797,34 @@ defmodule Hassock.Connection do
   # cancelled at HA; drop any other kind.
   defp cancel_pending(state, id, kind) do
     {{_ref, _kind, timer}, pending} = Map.pop(state.pending, id)
-    if timer, do: Process.cancel_timer(timer)
+    cancel_expiry(timer, id)
 
     case kind do
+      # Wait a while longer for HA's answer, so a subscription that does
+      # succeed can be cancelled; a connection that never answers is re-made.
       {:subscribe, _, _, _, _} ->
-        %{state | pending: Map.put(pending, id, {nil, {:cancelled, kind}, nil})}
+        grace = Process.send_after(self(), {:expire, id}, state.config.connect_timeout)
+        %{state | pending: Map.put(pending, id, {nil, {:cancelled, kind}, grace})}
 
       _ ->
         %{state | pending: pending}
     end
+  end
+
+  # A timer that already fired has queued its {:expire, id}; drop it, or the
+  # grace period below would end at once.
+  defp cancel_expiry(nil, _id), do: :ok
+
+  defp cancel_expiry(timer, id) do
+    if Process.cancel_timer(timer) == false do
+      receive do
+        {:expire, ^id} -> :ok
+      after
+        0 -> :ok
+      end
+    end
+
+    :ok
   end
 
   defp resubscribe(state) do

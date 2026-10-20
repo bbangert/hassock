@@ -220,4 +220,20 @@ defmodule Hassock.RegistryCacheTest do
 
     assert RegistryCache.list(cache, :floor) == []
   end
+
+  test "a reload queued behind a finished load still retries when it fails",
+       %{conn: conn, sock: sock} do
+    {:ok, cache} = RegistryCache.start_link(connection: conn, retry: 50)
+    area_sub = serve(sock, 5) |> sub_id("area_registry_updated")
+
+    # Lost while the first load runs: that load still finishes and is ready.
+    send(cache, {:hassock, conn, {:subscription_lost, area_sub, %{"code" => "x"}}})
+    serve(sock, 5)
+    assert_receive {:hassock_registry, ^cache, :ready}, 1_000
+
+    # The reload it queued fails; its retry must not be skipped.
+    assert [{:subscribe, "area_registry_updated", _} | _] = serve(sock, 3, %{area: :error})
+    assert serve(sock, 5) |> Enum.all?(&is_binary/1)
+    assert_receive {:hassock_registry, ^cache, :ready}, 1_000
+  end
 end

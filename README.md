@@ -108,7 +108,8 @@ under `"response"` in the result:
 
 ```elixir
 {:ok, config} = Hassock.command(conn, "get_config")
-{:ok, text} = Hassock.command(conn, "render_template", %{template: "{{ now() }}"}, timeout: 5_000)
+{:ok, entry} =
+  Hassock.command(conn, "config/entity_registry/get", %{entity_id: "light.kitchen"}, timeout: 5_000)
 ```
 
 It returns `{:ok, result}`, `{:error, %{"code" => _, "message" => _}}` for an

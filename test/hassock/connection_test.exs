@@ -90,6 +90,13 @@ defmodule Hassock.ConnectionTest do
       assert Hassock.connected?(conn)
     end
 
+    test "get_states reports entries without a string entity_id", %{conn: conn, sock: sock} do
+      {task, %{"id" => id}} = call_async(fn -> Hassock.get_states(conn) end)
+      FakeHA.result(sock, id, [%{"entity_id" => 123, "state" => "on"}])
+      assert {:error, {:unexpected_result, _}} = Task.await(task)
+      assert Hassock.connected?(conn)
+    end
+
     test "get_states decodes an empty list", %{conn: conn, sock: sock} do
       {task, %{"id" => id}} = call_async(fn -> Hassock.get_states(conn) end)
       FakeHA.result(sock, id, [])
@@ -154,6 +161,14 @@ defmodule Hassock.ConnectionTest do
       })
 
       assert_receive {:hassock, ^conn, {:event, {:registry_updated, :area, :create, "porch"}}}
+    end
+
+    test "a malformed registry event doesn't disturb commands in flight",
+         %{conn: conn, sock: sock} do
+      {task, %{"id" => id}} = call_async(fn -> Hassock.command(conn, "get_config") end)
+      FakeHA.event(sock, 99, %{event_type: "area_registry_updated", data: 42})
+      FakeHA.result(sock, id, %{"version" => "2026.10.0"})
+      assert {:ok, %{"version" => _}} = Task.await(task)
     end
 
     test "undecodable frames are dropped without crashing", %{conn: conn, sock: sock} do

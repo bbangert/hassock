@@ -33,7 +33,9 @@ defmodule Hassock.Connection do
     * `{:entities, %{added: _, changed: _, removed: _}}` - from `subscribe_entities/2`
     * `{:registry_updated, kind, action, id}` - from `subscribe_events/2` with
       one of `Hassock.Protocol.registry_event_types/0`
-    * `{:other, event_type, raw_event}` - from any other `subscribe_events/2` type
+    * `{:other, event_type, raw_event}` - from any other `subscribe_events/2`
+      type, and (with `event_type` `nil`) events without one, such as those
+      of a `render_template` subscription made with `command/4`
 
   ## Subscriptions
 
@@ -766,6 +768,7 @@ defmodule Hassock.Connection do
   end
 
   defp remove_subscription(state, sub_id) do
+    state = drop_pending_restore(state, sub_id)
     {sub, subscriptions} = Map.pop(state.subscriptions, sub_id)
     {ha_id, sub_ha_ids} = Map.pop(state.sub_ha_ids, sub_id)
 
@@ -783,6 +786,21 @@ defmodule Hassock.Connection do
       %{state | subscriber_monitors: monitors}
     else
       _ -> state
+    end
+  end
+
+  # A restore still waiting for HA would otherwise expire and re-make the
+  # connection for a subscription that no longer exists.
+  defp drop_pending_restore(state, sub_id) do
+    case Enum.find(state.pending, fn {_id, {_ref, kind, _timer}} ->
+           kind == {:resubscribe, sub_id}
+         end) do
+      {id, {_ref, _kind, timer}} ->
+        cancel_expiry(timer, id)
+        %{state | pending: Map.delete(state.pending, id)}
+
+      nil ->
+        state
     end
   end
 

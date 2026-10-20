@@ -241,6 +241,19 @@ defmodule Hassock.ProtocolTest do
     end
   end
 
+  describe "parse/1 — events without an event_type" do
+    test "a render_template event is passed through whole, not as an entities update" do
+      json =
+        Jason.encode!(%{
+          type: "event",
+          id: 4,
+          event: %{result: "21 °C", listeners: %{all: false, entities: ["sensor.t"]}}
+        })
+
+      assert {:event, 4, nil, %{"result" => "21 °C", "listeners" => _}} = Protocol.parse(json)
+    end
+  end
+
   describe "parse/1 — malformed fields" do
     defp event(event), do: Jason.encode!(%{type: "event", id: 3, event: event})
 

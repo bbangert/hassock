@@ -171,6 +171,18 @@ defmodule Hassock.ConnectionTest do
       assert {:ok, %{"version" => _}} = Task.await(task)
     end
 
+    test "events of a subscription made with command/4 keep their body",
+         %{conn: conn, sock: sock} do
+      {task, %{"id" => id, "type" => "render_template"}} =
+        call_async(fn -> Hassock.command(conn, "render_template", %{template: "{{ 1 }}"}) end)
+
+      FakeHA.result(sock, id, nil)
+      assert Task.await(task) == {:ok, nil}
+
+      FakeHA.event(sock, id, %{result: "1", listeners: %{all: false}})
+      assert_receive {:hassock, ^conn, {:event, {:other, nil, %{"result" => "1"}}}}, 1_000
+    end
+
     test "undecodable frames are dropped without crashing", %{conn: conn, sock: sock} do
       FakeHA.push_raw(sock, "{not json")
       {task, %{"id" => id}} = call_async(fn -> Hassock.command(conn, "get_config") end)

@@ -57,7 +57,7 @@ defmodule Hassock.Protocol do
           | {:state_changed, integer(), EntityState.t() | nil, EntityState.t() | nil}
           | {:entities, integer(), entities_payload()}
           | {:registry_updated, integer(), registry_kind(), registry_action(), String.t() | nil}
-          | {:event, integer(), String.t(), map()}
+          | {:event, integer(), String.t() | nil, map()}
           | {:pong, integer() | nil}
           | {:unknown, term()}
           | {:invalid, Exception.t()}
@@ -130,9 +130,14 @@ defmodule Hassock.Protocol do
     {:state_changed, id, new_state, old_state}
   end
 
+  # subscribe_entities events carry only the compressed "a"/"c"/"r" keys.
+  # Other events without an event_type (render_template, subscribe_trigger,
+  # ...) are passed through whole.
   defp parse_decoded(%{"type" => "event", "id" => id, "event" => %{} = ev})
        when not is_map_key(ev, "event_type") do
-    {:entities, id, parse_entities_event(ev)}
+    if map_size(ev) > 0 and Enum.all?(Map.keys(ev), &(&1 in ["a", "c", "r"])),
+      do: {:entities, id, parse_entities_event(ev)},
+      else: {:event, id, nil, ev}
   end
 
   defp parse_decoded(%{

@@ -65,6 +65,10 @@ These change behaviour for 0.2 code:
 - `wss://` connections verify the server certificate against the system CA
   store. Without a store, a warning is logged and the certificate isn't
   verified; set `ssl_options`. URL schemes are matched in any letter case.
+- Events without an `event_type` are decoded as `subscribe_entities` updates
+  only when they carry just the `a`/`c`/`r` keys; others (for example a
+  `render_template` subscription made with `command/4`) arrive whole as
+  `{:other, nil, raw_event}` (parse: `{:event, id, nil, event}`).
 - `Hassock.Protocol.parse/1` returns pongs as `{:pong, id}` (was `:pong`), so
   a `"ping"` sent with `command/4` gets its answer.
 - `Hassock.Protocol.parse/1` returns every result as

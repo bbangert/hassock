@@ -297,6 +297,27 @@ defmodule Hassock.ConnectionRobustnessTest do
       assert_receive {:fake_ha, ^sock3, %{"type" => "subscribe_events"}}, 1_000
     end
 
+    test "unsubscribing while its restore is pending doesn't later drop the connection" do
+      %{conn: conn, sock: sock} = connect(connect_timeout: 200)
+      {sub_id, _} = subscribe(conn, sock, &Hassock.subscribe_events(&1, "x"))
+
+      FakeHA.close(sock)
+      assert_receive {:hassock, ^conn, {:disconnected, _}}, 1_000
+      sock2 = await_auth(conn)
+      assert_receive {:fake_ha, ^sock2, %{"type" => "subscribe_events", "id" => restore}}, 1_000
+
+      task = Task.async(fn -> Hassock.unsubscribe_events(conn, sub_id) end)
+
+      assert_receive {:fake_ha, ^sock2,
+                      %{"type" => "unsubscribe_events", "subscription" => ^restore, "id" => id}},
+                     1_000
+
+      FakeHA.result(sock2, id, nil)
+      assert Task.await(task) == :ok
+
+      refute_receive {:hassock, ^conn, {:disconnected, :resubscribe_timeout}}, 400
+    end
+
     test "a subscribe that completes after the caller timed out is cancelled" do
       %{conn: conn, sock: sock} = connect()
 

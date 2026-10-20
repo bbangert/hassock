@@ -1,0 +1,29 @@
+[
+  {
+    "aliases": [],
+    "created_at": 1766423146.682875,
+    "floor_id": "floor_1",
+    "icon": null,
+    "level": null,
+    "modified_at": 1766423146.682892,
+    "name": "Floor 1"
+  },
+  {
+    "aliases": [],
+    "created_at": 1749483862.449218,
+    "floor_id": "floor_2",
+    "icon": null,
+    "level": 1,
+    "modified_at": 1749483862.449229,
+    "name": "Floor 2"
+  },
+  {
+    "aliases": [],
+    "created_at": 1749483891.494923,
+    "floor_id": "floor_3",
+    "icon": null,
+    "level": 2,
+    "modified_at": 1749483891.494934,
+    "name": "Floor 3"
+  }
+]

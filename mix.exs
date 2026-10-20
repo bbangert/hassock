@@ -1,7 +1,7 @@
 defmodule Hassock.MixProject do
   use Mix.Project
 
-  @version "0.2.0"
+  @version "0.3.0"
   @source_url "https://github.com/bbangert/hassock"
 
   def project do
@@ -22,7 +22,7 @@ defmodule Hassock.MixProject do
 
   def application do
     [
-      extra_applications: [:logger],
+      extra_applications: [:logger, :ssl, :public_key],
       mod: {Hassock.Application, []}
     ]
   end
@@ -31,6 +31,8 @@ defmodule Hassock.MixProject do
     [
       {:websockex, "~> 0.5"},
       {:jason, "~> 1.4"},
+      {:bandit, "~> 1.12", only: :test},
+      {:websock_adapter, "~> 0.5", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
@@ -51,7 +53,7 @@ defmodule Hassock.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib mix.exs README.md LICENSE)
+      files: ~w(lib mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 
@@ -59,7 +61,7 @@ defmodule Hassock.MixProject do
     [
       main: "readme",
       source_ref: "v#{@version}",
-      extras: ["README.md"],
+      extras: ["README.md", "CHANGELOG.md"],
       before_closing_body_tag: &before_closing_body_tag/1
     ]
   end

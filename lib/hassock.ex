@@ -46,17 +46,29 @@ defmodule Hassock do
   @doc "Transfer connection ownership."
   defdelegate controlling_process(conn, pid), to: Connection
 
+  @doc "Send any HA WebSocket command and wait for its result. See `Hassock.Connection.command/4`."
+  defdelegate command(conn, type, payload \\ %{}, opts \\ []), to: Connection
+
+  @doc "Connection status and next retry time. See `Hassock.Connection.status/1`."
+  defdelegate status(conn), to: Connection
+
+  @doc "Also receive the connection's lifecycle messages. See `Hassock.Connection.watch/1`."
+  defdelegate watch(conn), to: Connection
+
+  @doc "Stop receiving the connection's lifecycle messages. See `Hassock.Connection.unwatch/1`."
+  defdelegate unwatch(conn), to: Connection
+
   @doc "Subscribe to entity state updates. Pass `nil` for all entities."
-  defdelegate subscribe_entities(conn, entity_ids \\ nil), to: Connection
+  defdelegate subscribe_entities(conn, entity_ids \\ nil, opts \\ []), to: Connection
 
   @doc "Subscribe to a non-entity HA event type."
-  defdelegate subscribe_events(conn, event_type), to: Connection
+  defdelegate subscribe_events(conn, event_type, opts \\ []), to: Connection
 
   @doc "Cancel a subscription."
   defdelegate unsubscribe_events(conn, subscription_id), to: Connection
 
-  @doc "Call a Home Assistant service."
-  defdelegate call_service(conn, service_call), to: Connection
+  @doc "Call a Home Assistant service. See `Hassock.Connection.call_service/3`."
+  defdelegate call_service(conn, service_call, opts \\ []), to: Connection
 
   @doc "One-shot fetch of all entity states."
   defdelegate get_states(conn), to: Connection

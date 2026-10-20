@@ -1,8 +1,9 @@
 defmodule Hassock.Supervisor do
   @moduledoc """
-  Optional convenience supervisor that wires a `Hassock.Connection` and
-  (optionally) a `Hassock.Cache` together under a `one_for_all` strategy —
-  if either crashes, both restart from a clean slate.
+  Optional convenience supervisor that wires a `Hassock.Connection`,
+  (optionally) a `Hassock.Cache` and (optionally) a `Hassock.RegistryCache`
+  together under a `one_for_all` strategy — if any crashes, all restart from
+  a clean slate.
 
   Equivalent to writing the pair into your own supervision tree by hand. Use
   this when you don't need finer-grained control.
@@ -11,12 +12,16 @@ defmodule Hassock.Supervisor do
 
     * `:config` — `%Hassock.Config{}` (required)
     * `:cache` — when `true`, also start a `Hassock.Cache` (default: `false`)
+    * `:registries` — when `true`, also start a `Hassock.RegistryCache`
+      (default: `false`)
     * `:controller` — pid that should receive events from the topmost layer
-      (the cache if present, else the connection). Default: caller of
-      `start_link/1`.
+      (the cache if present, else the connection) and from the registry
+      cache. Default: caller of `start_link/1`.
     * `:name` — register the supervisor under this name (optional)
     * `:connection_name` — register the connection under this name (default: `Hassock.Connection`)
     * `:cache_name` — register the cache under this name (default: `Hassock.Cache`)
+    * `:registry_cache_name` — register the registry cache under this name
+      (default: `Hassock.RegistryCache`)
 
   ## Example
 
@@ -32,7 +37,7 @@ defmodule Hassock.Supervisor do
 
   use Supervisor
 
-  alias Hassock.{Cache, Connection}
+  alias Hassock.{Cache, Connection, RegistryCache}
 
   def start_link(opts) do
     sup_opts = Keyword.take(opts, [:name])
@@ -48,21 +53,30 @@ defmodule Hassock.Supervisor do
     conn_name = Keyword.get(opts, :connection_name, Hassock.Connection)
     cache_name = Keyword.get(opts, :cache_name, Hassock.Cache)
 
-    conn_opts =
-      [config: config, name: conn_name]
-      |> maybe_put(:controlling_pid, if(use_cache, do: nil, else: controller))
+    # With a cache, the connection starts without a controller (events are
+    # dropped, not sent to this supervisor) until the cache claims it.
+    conn_opts = [
+      config: config,
+      name: conn_name,
+      controlling_pid: if(use_cache, do: nil, else: controller)
+    ]
+
+    registry_name = Keyword.get(opts, :registry_cache_name, Hassock.RegistryCache)
 
     children =
       [{Connection, conn_opts}] ++
-        if use_cache do
-          [{Cache, [connection: conn_name, name: cache_name, controlling_pid: controller]}]
-        else
-          []
-        end
+        if(use_cache,
+          do: [{Cache, [connection: conn_name, name: cache_name, controlling_pid: controller]}],
+          else: []
+        ) ++
+        if(Keyword.get(opts, :registries, false),
+          do: [
+            {RegistryCache,
+             [connection: conn_name, name: registry_name, controlling_pid: controller]}
+          ],
+          else: []
+        )
 
     Supervisor.init(children, strategy: :one_for_all)
   end
-
-  defp maybe_put(opts, _key, nil), do: opts
-  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 end

@@ -1,0 +1,286 @@
+[
+  {
+    "area_id": "area_6",
+    "categories": {
+      "automation": "category0000000000000000000000000001"
+    },
+    "config_entry_id": null,
+    "config_subentry_id": null,
+    "created_at": 0.0,
+    "device_id": null,
+    "disabled_by": null,
+    "entity_category": null,
+    "entity_id": "automation.entity_5",
+    "has_entity_name": false,
+    "hidden_by": null,
+    "icon": null,
+    "id": "unique0000000000000000000000000001",
+    "labels": [],
+    "modified_at": 1767027224.099692,
+    "name": "Entity 1",
+    "next_name_part": "Part 1",
+    "options": {
+      "conversation": {
+        "should_expose": true
+      }
+    },
+    "original_name": "Entity 2",
+    "platform": "automation",
+    "translation_key": null,
+    "unique_id": "unique0000000000000000000000000002"
+  },
+  {
+    "area_id": null,
+    "categories": {},
+    "config_entry_id": "entry0000000000000000000000000003",
+    "config_subentry_id": null,
+    "created_at": 0.0,
+    "device_id": "device0000000000000000000000000004",
+    "disabled_by": null,
+    "entity_category": "diagnostic",
+    "entity_id": "binary_sensor.entity_6",
+    "has_entity_name": true,
+    "hidden_by": "user",
+    "icon": null,
+    "id": "unique0000000000000000000000000003",
+    "labels": [],
+    "modified_at": 1767146883.478597,
+    "name": "Entity 3",
+    "next_name_part": "Part 2",
+    "options": {
+      "conversation": {
+        "should_expose": true
+      }
+    },
+    "original_name": "Entity 4",
+    "platform": "zwave_js",
+    "translation_key": null,
+    "unique_id": "unique0000000000000000000000000004"
+  },
+  {
+    "area_id": null,
+    "categories": {},
+    "config_entry_id": "entry0000000000000000000000000003",
+    "config_subentry_id": null,
+    "created_at": 0.0,
+    "device_id": "device0000000000000000000000000007",
+    "disabled_by": null,
+    "entity_category": null,
+    "entity_id": "switch.entity_7",
+    "has_entity_name": true,
+    "hidden_by": "integration",
+    "icon": null,
+    "id": "unique0000000000000000000000000005",
+    "labels": [],
+    "modified_at": 1768167428.614151,
+    "name": "Entity 5",
+    "next_name_part": "Part 2",
+    "options": {
+      "conversation": {
+        "should_expose": true
+      }
+    },
+    "original_name": "Entity 6",
+    "platform": "zwave_js",
+    "translation_key": null,
+    "unique_id": "unique0000000000000000000000000006"
+  },
+  {
+    "area_id": null,
+    "categories": {},
+    "config_entry_id": "entry0000000000000000000000000002",
+    "config_subentry_id": null,
+    "created_at": 0.0,
+    "device_id": "device0000000000000000000000000002",
+    "disabled_by": "integration",
+    "entity_category": null,
+    "entity_id": "binary_sensor.entity_8",
+    "has_entity_name": true,
+    "hidden_by": null,
+    "icon": null,
+    "id": "unique0000000000000000000000000007",
+    "labels": [],
+    "modified_at": 0.0,
+    "name": null,
+    "next_name_part": "Part 2",
+    "options": {
+      "conversation": {
+        "should_expose": true
+      }
+    },
+    "original_name": "Entity 7",
+    "platform": "hassio",
+    "translation_key": null,
+    "unique_id": "unique0000000000000000000000000008"
+  },
+  {
+    "area_id": null,
+    "categories": {},
+    "config_entry_id": "entry0000000000000000000000000006",
+    "config_subentry_id": null,
+    "created_at": 0.0,
+    "device_id": null,
+    "disabled_by": null,
+    "entity_category": "diagnostic",
+    "entity_id": "binary_sensor.entity_9",
+    "has_entity_name": false,
+    "hidden_by": null,
+    "icon": null,
+    "id": "unique0000000000000000000000000009",
+    "labels": [],
+    "modified_at": 0.0,
+    "name": null,
+    "next_name_part": null,
+    "options": {
+      "conversation": {
+        "should_expose": true
+      }
+    },
+    "original_name": "Entity 8",
+    "platform": "cloud",
+    "translation_key": null,
+    "unique_id": "unique0000000000000000000000000010"
+  },
+  {
+    "area_id": null,
+    "categories": {},
+    "config_entry_id": "entry0000000000000000000000000001",
+    "config_subentry_id": null,
+    "created_at": 0.0,
+    "device_id": "device0000000000000000000000000001",
+    "disabled_by": null,
+    "entity_category": "config",
+    "entity_id": "switch.entity_10",
+    "has_entity_name": true,
+    "hidden_by": null,
+    "icon": null,
+    "id": "unique0000000000000000000000000011",
+    "labels": [],
+    "modified_at": 0.0,
+    "name": null,
+    "next_name_part": "Part 2",
+    "options": {
+      "conversation": {
+        "should_expose": true
+      }
+    },
+    "original_name": "Entity 9",
+    "platform": "sonos",
+    "translation_key": "cross_fade",
+    "unique_id": "unique0000000000000000000000000012"
+  },
+  {
+    "area_id": null,
+    "categories": {},
+    "config_entry_id": null,
+    "config_subentry_id": null,
+    "created_at": 0.0,
+    "device_id": null,
+    "disabled_by": null,
+    "entity_category": null,
+    "entity_id": "zwave.entity_11",
+    "has_entity_name": false,
+    "hidden_by": null,
+    "icon": null,
+    "id": "unique0000000000000000000000000013",
+    "labels": [],
+    "modified_at": 0.0,
+    "name": "Entity 10",
+    "next_name_part": null,
+    "options": {
+      "conversation": {
+        "should_expose": true
+      }
+    },
+    "original_name": null,
+    "platform": "zwave",
+    "translation_key": null,
+    "unique_id": "unique0000000000000000000000000014"
+  },
+  {
+    "area_id": null,
+    "categories": {},
+    "config_entry_id": "entry0000000000000000000000000003",
+    "config_subentry_id": null,
+    "created_at": 0.0,
+    "device_id": "device0000000000000000000000000006",
+    "disabled_by": null,
+    "entity_category": null,
+    "entity_id": "light.entity_12",
+    "has_entity_name": true,
+    "hidden_by": null,
+    "icon": "mdi:light-recessed",
+    "id": "unique0000000000000000000000000015",
+    "labels": [],
+    "modified_at": 1768632891.579951,
+    "name": "Entity 11",
+    "next_name_part": "Part 2",
+    "options": {
+      "conversation": {
+        "should_expose": true
+      }
+    },
+    "original_name": "Entity 6",
+    "platform": "zwave_js",
+    "translation_key": null,
+    "unique_id": "unique0000000000000000000000000016"
+  },
+  {
+    "area_id": "area_1",
+    "categories": {
+      "automation": "category0000000000000000000000000002"
+    },
+    "config_entry_id": null,
+    "config_subentry_id": null,
+    "created_at": 0.0,
+    "device_id": null,
+    "disabled_by": null,
+    "entity_category": null,
+    "entity_id": "automation.entity_13",
+    "has_entity_name": false,
+    "hidden_by": null,
+    "icon": null,
+    "id": "unique0000000000000000000000000017",
+    "labels": [],
+    "modified_at": 1767026817.341357,
+    "name": "Entity 12",
+    "next_name_part": "Part 1",
+    "options": {
+      "conversation": {
+        "should_expose": true
+      }
+    },
+    "original_name": "Entity 13",
+    "platform": "automation",
+    "translation_key": null,
+    "unique_id": "unique0000000000000000000000000018"
+  },
+  {
+    "area_id": null,
+    "categories": {},
+    "config_entry_id": "entry0000000000000000000000000002",
+    "config_subentry_id": null,
+    "created_at": 0.0,
+    "device_id": "device0000000000000000000000000003",
+    "disabled_by": "integration",
+    "entity_category": null,
+    "entity_id": "binary_sensor.entity_14",
+    "has_entity_name": false,
+    "hidden_by": null,
+    "icon": null,
+    "id": "unique0000000000000000000000000019",
+    "labels": [],
+    "modified_at": 0.0,
+    "name": null,
+    "next_name_part": "Part 2",
+    "options": {
+      "conversation": {
+        "should_expose": true
+      }
+    },
+    "original_name": "Entity 14",
+    "platform": "hassio",
+    "translation_key": null,
+    "unique_id": "unique0000000000000000000000000020"
+  }
+]

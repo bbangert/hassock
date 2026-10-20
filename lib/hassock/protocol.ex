@@ -22,6 +22,11 @@ defmodule Hassock.Protocol do
   - `subscribe_entities` — efficient targeted entity subscription
   - `unsubscribe_events` — cancel any subscription
   - `call_service`, `get_states`, `get_services`, `ping`
+  - any other command through `encode_command/3`
+
+  Results are returned undecoded (`{:result, id, success, result}`): only the
+  sender knows which command an id belongs to, so `Hassock.Connection`
+  decodes them by command kind with `decode_states/1` and `decode_services/1`.
   """
 
   alias Hassock.{EntityState, ServiceCall}
@@ -49,22 +54,49 @@ defmodule Hassock.Protocol do
           | :auth_ok
           | {:auth_invalid, String.t()}
           | {:result, integer(), boolean(), term()}
-          | {:state_changed, integer(), EntityState.t(), EntityState.t() | nil}
+          | {:state_changed, integer(), EntityState.t() | nil, EntityState.t() | nil}
           | {:entities, integer(), entities_payload()}
-          | {:event, integer(), String.t(), map()}
-          | {:states, integer(), [EntityState.t()]}
-          | {:services, integer(), %{String.t() => [String.t()]}}
-          | :pong
-          | {:unknown, map()}
+          | {:registry_updated, integer(), registry_kind(), registry_action(), String.t() | nil}
+          | {:event, integer(), String.t() | nil, map()}
+          | {:pong, integer() | nil}
+          | {:unknown, term()}
+          | {:invalid, Exception.t()}
+
+  @typedoc "Which registry a `*_registry_updated` event is about."
+  @type registry_kind :: :floor | :area | :device | :entity | :label
+
+  @typedoc "Registry change action; unrecognised actions are kept as strings."
+  @type registry_action :: :create | :update | :remove | String.t()
+
+  @registry_events %{
+    "floor_registry_updated" => {:floor, "floor_id"},
+    "area_registry_updated" => {:area, "area_id"},
+    "device_registry_updated" => {:device, "device_id"},
+    "entity_registry_updated" => {:entity, "entity_id"},
+    "label_registry_updated" => {:label, "label_id"}
+  }
+
+  @doc "The HA event types that `parse/1` decodes into `:registry_updated`."
+  @spec registry_event_types() :: [String.t()]
+  def registry_event_types, do: Map.keys(@registry_events)
 
   @doc """
   Parse a raw JSON string from the HA WebSocket into a tagged term.
+
+  Text that isn't valid JSON, or JSON whose fields don't have the types HA
+  sends, returns `{:invalid, exception}` rather than raising: frames come
+  from the network, and one bad frame shouldn't take the connection down.
+  Fields of an entities event that have the wrong type are dropped.
   """
   @spec parse(String.t()) :: parsed()
   def parse(json) do
-    json
-    |> Jason.decode!()
-    |> parse_decoded()
+    case Jason.decode(json) do
+      {:ok, decoded} -> parse_decoded(decoded)
+      {:error, error} -> {:invalid, error}
+    end
+  rescue
+    error in [FunctionClauseError, BadMapError, ArgumentError, KeyError, Protocol.UndefinedError] ->
+      {:invalid, error}
   end
 
   defp parse_decoded(%{"type" => "auth_required"}), do: :auth_required
@@ -76,7 +108,7 @@ defmodule Hassock.Protocol do
   defp parse_decoded(%{"type" => "auth_invalid"}),
     do: {:auth_invalid, "unknown reason"}
 
-  defp parse_decoded(%{"type" => "pong"}), do: :pong
+  defp parse_decoded(%{"type" => "pong"} = msg), do: {:pong, Map.get(msg, "id")}
 
   defp parse_decoded(%{
          "type" => "event",
@@ -85,15 +117,41 @@ defmodule Hassock.Protocol do
            "event_type" => "state_changed",
            "data" => %{"entity_id" => entity_id, "new_state" => new_state_map} = data
          }
-       }) do
-    new_state = parse_state(entity_id, new_state_map)
-    old_state = data |> Map.get("old_state") |> parse_state(entity_id)
+       })
+       when is_binary(entity_id) and (is_map(new_state_map) or is_nil(new_state_map)) do
+    old_state =
+      case Map.get(data, "old_state") do
+        %{} = old_state_map -> parse_state(entity_id, old_state_map)
+        _ -> nil
+      end
+
+    # new_state is nil when the entity was removed.
+    new_state = if new_state_map, do: parse_state(entity_id, new_state_map)
     {:state_changed, id, new_state, old_state}
   end
 
+  # subscribe_entities events carry only the compressed "a"/"c"/"r" keys.
+  # Other events without an event_type (render_template, subscribe_trigger,
+  # ...) are passed through whole.
   defp parse_decoded(%{"type" => "event", "id" => id, "event" => %{} = ev})
        when not is_map_key(ev, "event_type") do
-    {:entities, id, parse_entities_event(ev)}
+    if map_size(ev) > 0 and Enum.all?(Map.keys(ev), &(&1 in ["a", "c", "r"])),
+      do: {:entities, id, parse_entities_event(ev)},
+      else: {:event, id, nil, ev}
+  end
+
+  defp parse_decoded(%{
+         "type" => "event",
+         "id" => id,
+         "event" => %{"event_type" => type} = event
+       })
+       when is_map_key(@registry_events, type) do
+    {kind, id_key} = Map.fetch!(@registry_events, type)
+
+    case Map.get(event, "data") do
+      %{} = data -> {:registry_updated, id, kind, registry_action(data["action"]), data[id_key]}
+      _ -> {:event, id, type, event}
+    end
   end
 
   defp parse_decoded(%{
@@ -103,25 +161,6 @@ defmodule Hassock.Protocol do
        }),
        do: {:event, id, type, event}
 
-  defp parse_decoded(%{"type" => "result", "id" => id, "success" => true, "result" => result})
-       when is_list(result) do
-    if Enum.all?(result, &(is_map(&1) and Map.has_key?(&1, "entity_id"))) do
-      states = Enum.map(result, fn s -> parse_state(s, s["entity_id"]) end)
-      {:states, id, states}
-    else
-      {:result, id, true, result}
-    end
-  end
-
-  defp parse_decoded(%{"type" => "result", "id" => id, "success" => true, "result" => result})
-       when is_map(result) do
-    if services_result?(result) do
-      {:services, id, parse_services(result)}
-    else
-      {:result, id, true, result}
-    end
-  end
-
   defp parse_decoded(%{"type" => "result", "id" => id, "success" => false} = msg),
     do: {:result, id, false, Map.get(msg, "error")}
 
@@ -130,23 +169,35 @@ defmodule Hassock.Protocol do
 
   defp parse_decoded(msg), do: {:unknown, msg}
 
-  # parse_state/2 — accepts (entity_id, state_map) for state_changed events,
-  # or (state_map, entity_id) for get_states results which embed entity_id in the map.
-  defp parse_state(nil, _entity_id), do: nil
-  defp parse_state(_entity_id, nil), do: nil
+  defp registry_action("create"), do: :create
+  defp registry_action("update"), do: :update
+  defp registry_action("remove"), do: :remove
+  defp registry_action(action), do: action
+
+  @doc "Decode a `get_states` result into `%Hassock.EntityState{}` structs."
+  @spec decode_states([map()]) :: [EntityState.t()]
+  def decode_states(states) when is_list(states) do
+    for %{"entity_id" => entity_id} = s <- states,
+        is_binary(entity_id),
+        do: parse_state(entity_id, s)
+  end
+
+  @doc "Decode a `get_services` result into `%{domain => [service_name]}`."
+  @spec decode_services(map()) :: %{String.t() => [String.t()]}
+  def decode_services(result) when is_map(result) do
+    Map.new(result, fn {domain, services} ->
+      {domain, services |> Map.keys() |> Enum.sort()}
+    end)
+  end
 
   defp parse_state(entity_id, %{} = state_map) when is_binary(entity_id) do
     %EntityState{
       entity_id: entity_id,
       state: Map.get(state_map, "state", "unknown"),
-      attributes: Map.get(state_map, "attributes", %{}),
+      attributes: map_or_empty(Map.get(state_map, "attributes", %{})),
       last_changed: Map.get(state_map, "last_changed"),
       last_updated: Map.get(state_map, "last_updated")
     }
-  end
-
-  defp parse_state(%{} = state_map, entity_id) when is_binary(entity_id) do
-    parse_state(entity_id, state_map)
   end
 
   # -- subscribe_entities event payload --
@@ -171,31 +222,40 @@ defmodule Hassock.Protocol do
     %{
       added: parse_entities_added(Map.get(event, "a", %{})),
       changed: parse_entities_changed(Map.get(event, "c", %{})),
-      removed: Map.get(event, "r", [])
+      removed: parse_entities_removed(Map.get(event, "r", []))
     }
   end
 
-  defp parse_entities_added(added) when is_map(added) do
-    Map.new(added, fn {entity_id, compressed} ->
+  defp parse_entities_added(%{} = added) do
+    for {entity_id, %{} = compressed} <- added, into: %{} do
       {entity_id, decompress_full_state(entity_id, compressed)}
-    end)
+    end
   end
 
-  defp parse_entities_changed(changed) when is_map(changed) do
-    Map.new(changed, fn {entity_id, diff} ->
+  defp parse_entities_added(_added), do: %{}
+
+  defp parse_entities_changed(%{} = changed) do
+    for {entity_id, %{} = diff} <- changed, into: %{} do
       {entity_id,
        %{
          added: decompress_diff_added(Map.get(diff, "+", %{})),
          removed: decompress_diff_removed(Map.get(diff, "-", %{}))
        }}
-    end)
+    end
   end
+
+  defp parse_entities_changed(_changed), do: %{}
+
+  defp parse_entities_removed(removed) when is_list(removed),
+    do: Enum.filter(removed, &is_binary/1)
+
+  defp parse_entities_removed(_removed), do: []
 
   defp decompress_full_state(entity_id, %{} = c) do
     %EntityState{
       entity_id: entity_id,
       state: Map.get(c, "s", "unknown"),
-      attributes: Map.get(c, "a", %{}),
+      attributes: map_or_empty(Map.get(c, "a", %{})),
       last_changed: Map.get(c, "lc"),
       last_updated: Map.get(c, "lu")
     }
@@ -206,11 +266,17 @@ defmodule Hassock.Protocol do
 
     Enum.reduce(keys, %{}, fn {atom, k}, acc ->
       case Map.fetch(added, k) do
+        {:ok, v} when atom == :attributes and not is_map(v) -> acc
         {:ok, v} -> Map.put(acc, atom, v)
         :error -> acc
       end
     end)
   end
+
+  defp decompress_diff_added(_added), do: %{}
+
+  defp map_or_empty(%{} = map), do: map
+  defp map_or_empty(_other), do: %{}
 
   defp decompress_diff_removed(%{} = removed) do
     case Map.fetch(removed, "a") do
@@ -219,7 +285,21 @@ defmodule Hassock.Protocol do
     end
   end
 
+  defp decompress_diff_removed(_removed), do: %{}
+
   # -- Encoding --
+
+  @doc """
+  Encode any command: `payload` merged with `id` and `type`. Top-level
+  payload keys may be atoms or strings; `id` and `type` always win.
+  """
+  @spec encode_command(integer(), String.t(), map()) :: String.t()
+  def encode_command(id, type, payload \\ %{}) when is_binary(type) and is_map(payload) do
+    payload
+    |> Map.new(fn {k, v} -> {to_string(k), v} end)
+    |> Map.merge(%{"id" => id, "type" => type})
+    |> Jason.encode!()
+  end
 
   @doc "Encode an authentication message."
   @spec encode_auth(String.t()) :: String.t()
@@ -261,39 +341,24 @@ defmodule Hassock.Protocol do
   @doc "Encode a `call_service` command."
   @spec encode_call_service(integer(), ServiceCall.t()) :: String.t()
   def encode_call_service(id, %ServiceCall{} = call) do
-    msg = %{id: id, type: "call_service", domain: call.domain, service: call.service}
-    msg = if call.target, do: Map.put(msg, :target, call.target), else: msg
-
-    msg =
-      if call.service_data != %{}, do: Map.put(msg, :service_data, call.service_data), else: msg
-
-    Jason.encode!(msg)
+    encode_command(id, "call_service", call_service_payload(call))
   end
+
+  @doc "The `call_service` fields (everything but `id` and `type`) for a call."
+  @spec call_service_payload(ServiceCall.t()) :: map()
+  def call_service_payload(%ServiceCall{} = call) do
+    %{"domain" => call.domain, "service" => call.service}
+    |> put_if("target", call.target, call.target != nil)
+    |> put_if("service_data", call.service_data, call.service_data != %{})
+    |> put_if("return_response", true, call.return_response)
+  end
+
+  defp put_if(map, key, value, true), do: Map.put(map, key, value)
+  defp put_if(map, _key, _value, _), do: map
 
   @doc "Encode a `ping` command."
   @spec encode_ping(integer()) :: String.t()
   def encode_ping(id), do: Jason.encode!(%{id: id, type: "ping"})
-
-  # -- get_services result helpers --
-
-  defp services_result?(result) when is_map(result) do
-    case Enum.take(result, 1) do
-      [{_domain, services}] when is_map(services) ->
-        case Enum.take(services, 1) do
-          [{_name, detail}] when is_map(detail) -> true
-          _ -> false
-        end
-
-      _ ->
-        false
-    end
-  end
-
-  defp parse_services(result) do
-    Map.new(result, fn {domain, services} ->
-      {domain, services |> Map.keys() |> Enum.sort()}
-    end)
-  end
 
   # -- State diffing --
 

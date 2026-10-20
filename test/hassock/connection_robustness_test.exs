@@ -326,6 +326,24 @@ defmodule Hassock.ConnectionRobustnessTest do
       await_auth(conn)
     end
 
+    test "a subscribe granted after its caller died is cancelled" do
+      %{conn: conn, sock: sock} = connect()
+
+      caller = spawn(fn -> Hassock.subscribe_events(conn, "x") end)
+      assert_receive {:fake_ha, ^sock, %{"type" => "subscribe_events", "id" => id}}
+      ref = Process.monitor(caller)
+      Process.exit(caller, :kill)
+      assert_receive {:DOWN, ^ref, _, _, _}
+
+      FakeHA.result(sock, id, nil)
+
+      assert_receive {:fake_ha, ^sock, %{"type" => "unsubscribe_events", "subscription" => ^id}},
+                     1_000
+
+      FakeHA.event(sock, id, %{event_type: "x", data: %{}})
+      refute_receive {:hassock, ^conn, {:event, _}}, 100
+    end
+
     test "a subscribe whose caller died is cancelled after the expiry" do
       %{conn: conn, sock: sock} = connect()
 

@@ -202,7 +202,7 @@ defmodule Hassock.Connection do
           {:ok, integer} | {:error, command_error}
   def subscribe_entities(conn, entity_ids \\ nil, opts \\ []) do
     payload = if entity_ids, do: %{"entity_ids" => entity_ids}, else: %{}
-    request(conn, "subscribe_entities", payload, {:subscribe, :entities, to(opts)}, opts)
+    request(conn, "subscribe_entities", payload, {:subscribe, :entities, to(opts), self()}, opts)
   end
 
   @doc """
@@ -214,7 +214,7 @@ defmodule Hassock.Connection do
           {:ok, integer} | {:error, command_error}
   def subscribe_events(conn, event_type, opts \\ []) when is_binary(event_type) do
     payload = %{"event_type" => event_type}
-    request(conn, "subscribe_events", payload, {:subscribe, :events, to(opts)}, opts)
+    request(conn, "subscribe_events", payload, {:subscribe, :events, to(opts), self()}, opts)
   end
 
   defp to(opts) do
@@ -572,15 +572,28 @@ defmodule Hassock.Connection do
 
   # The caller gave up before HA answered. A subscription it never learned
   # the id of is cancelled at HA rather than kept forever.
-  defp handle_result({:cancelled, {:subscribe, _, _, _, _}}, id, true, _result, nil, state),
+  defp handle_result({:cancelled, {:subscribe, _, _, _, _, _}}, id, true, _result, nil, state),
     do: retire_ha_id(state, id)
 
   defp handle_result({:cancelled, _kind}, _id, true, _result, nil, state), do: state
 
-  defp handle_result({:subscribe, kind, subscriber, type, payload}, id, true, _result, ref, state) do
-    reply(ref, {:ok, id})
-    sub = %{type: type, payload: payload, kind: kind, ref: ref}
-    add_subscription(state, id, sub, subscriber)
+  # Nobody can learn the id of a subscription whose requester died while
+  # waiting, so it is cancelled rather than kept.
+  defp handle_result(
+         {:subscribe, kind, subscriber, type, payload, caller},
+         id,
+         true,
+         _result,
+         ref,
+         state
+       ) do
+    if Process.alive?(caller) do
+      reply(ref, {:ok, id})
+      sub = %{type: type, payload: payload, kind: kind, ref: ref}
+      add_subscription(state, id, sub, subscriber)
+    else
+      retire_ha_id(state, id)
+    end
   end
 
   defp handle_result(:get_states, _id, true, result, ref, state) when is_list(result) do
@@ -716,8 +729,9 @@ defmodule Hassock.Connection do
     end
   end
 
-  defp command_kind({:subscribe, sub_kind, to}, type, payload) when is_pid(to) or is_nil(to),
-    do: {:subscribe, sub_kind, to || :controller, type, payload}
+  defp command_kind({:subscribe, sub_kind, to, caller}, type, payload)
+       when is_pid(to) or is_nil(to),
+       do: {:subscribe, sub_kind, to || :controller, type, payload, caller}
 
   defp command_kind(kind, _type, _payload), do: kind
 
@@ -809,7 +823,7 @@ defmodule Hassock.Connection do
     case kind do
       # Wait a while longer for HA's answer, so a subscription that does
       # succeed can be cancelled; a connection that never answers is re-made.
-      {:subscribe, _, _, _, _} ->
+      {:subscribe, _, _, _, _, _} ->
         grace = Process.send_after(self(), {:expire, id}, state.config.connect_timeout)
         %{state | pending: Map.put(pending, id, {nil, {:cancelled, kind}, grace})}
 

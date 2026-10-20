@@ -153,4 +153,12 @@ defmodule Hassock.CacheTest do
 
     assert_receive {:hassock_cache, _cache, {:auth_failed, "Invalid access token"}}, 1_000
   end
+
+  test "a stopped cache's subscription ends with it", %{sock: sock} = ctx do
+    {cache, sub} = start_cache(ctx)
+    GenServer.stop(cache)
+
+    assert_receive {:fake_ha, ^sock, %{"type" => "unsubscribe_events", "subscription" => ^sub}},
+                   1_000
+  end
 end

@@ -43,6 +43,8 @@ defmodule Hassock.RegistryCache do
       # the running list task: {task_ref, :load | {:relist, kind}, generation}
       :task,
       :load_timer,
+      # pids of started tasks whose exit signal hasn't arrived yet
+      task_pids: MapSet.new(),
       # bumped on every :connected and :disconnected, so a task result from
       # an earlier session can be told apart from a current one
       generation: 0,
@@ -123,7 +125,7 @@ defmodule Hassock.RegistryCache do
   @impl true
   def init(opts) do
     # Trap exits so a crashing list task arrives as :DOWN instead of taking
-    # the cache down with it.
+    # the cache down with it (other exits stop the cache; see handle_info/2).
     Process.flag(:trap_exit, true)
     controlling_pid = Keyword.fetch!(opts, :controlling_pid)
     name = Keyword.get(opts, :name)
@@ -229,6 +231,16 @@ defmodule Hassock.RegistryCache do
     {:noreply, %{state | controlling_pid: nil, controlling_monitor: nil}}
   end
 
+  # Tasks' exits are handled through their monitors. Any other linked
+  # process that exits is the Registry partition holding this cache's table
+  # registration: without it reads find nothing, so stop and let the
+  # supervisor start a cache that registers again.
+  def handle_info({:EXIT, pid, reason}, state) do
+    if MapSet.member?(state.task_pids, pid),
+      do: {:noreply, %{state | task_pids: MapSet.delete(state.task_pids, pid)}},
+      else: {:stop, {:linked_exit, reason}, state}
+  end
+
   def handle_info(_msg, state), do: {:noreply, state}
 
   # -- Tasks --
@@ -246,7 +258,12 @@ defmodule Hassock.RegistryCache do
     parent = self()
     missing = Enum.reject(Protocol.registry_event_types(), &Map.has_key?(state.subscribed, &1))
     task = Task.async(fn -> run(job, conn, parent, missing) end)
-    %{state | task: {task.ref, job, state.generation}}
+
+    %{
+      state
+      | task: {task.ref, job, state.generation},
+        task_pids: MapSet.put(state.task_pids, task.pid)
+    }
   end
 
   # A full load supersedes queued re-lists.

@@ -236,4 +236,14 @@ defmodule Hassock.RegistryCacheTest do
     assert serve(sock, 5) |> Enum.all?(&is_binary/1)
     assert_receive {:hassock_registry, ^cache, :ready}, 1_000
   end
+
+  test "stops when a linked process other than its tasks exits", ctx do
+    Process.flag(:trap_exit, true)
+    {cache, _seen} = start_cache(ctx)
+    ref = Process.monitor(cache)
+
+    # Stands in for the Registry partition that holds its registration.
+    spawn(fn -> Process.exit(cache, :partition_down) end)
+    assert_receive {:DOWN, ^ref, :process, ^cache, {:linked_exit, :partition_down}}, 1_000
+  end
 end

@@ -262,7 +262,9 @@ defmodule Hassock.Cache do
   end
 
   defp ensure_subscription(%State{subscription_id: nil} = state) do
-    case Connection.subscribe_entities(state.connection, nil) do
+    # Bound to this process, so the subscription ends with the cache even
+    # when the connection outlives it.
+    case Connection.subscribe_entities(state.connection, nil, to: self()) do
       {:ok, sub_id} ->
         %{state | subscription_id: sub_id, ready: false}
 

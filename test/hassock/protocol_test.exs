@@ -220,6 +220,27 @@ defmodule Hassock.ProtocolTest do
     end
   end
 
+  describe "parse/1 — pong and removals" do
+    test "pong keeps its id" do
+      assert {:pong, 5} = Protocol.parse(~s({"id": 5, "type": "pong"}))
+    end
+
+    test "state_changed for a removed entity has a nil new_state" do
+      json =
+        Jason.encode!(%{
+          type: "event",
+          id: 2,
+          event: %{
+            event_type: "state_changed",
+            data: %{entity_id: "light.gone", new_state: nil, old_state: %{state: "on"}}
+          }
+        })
+
+      assert {:state_changed, 2, nil, %EntityState{entity_id: "light.gone", state: "on"}} =
+               Protocol.parse(json)
+    end
+  end
+
   describe "parse/1 — malformed fields" do
     defp event(event), do: Jason.encode!(%{type: "event", id: 3, event: event})
 

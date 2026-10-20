@@ -97,6 +97,13 @@ defmodule Hassock.RegistriesTest do
       end
     end
 
+    test "a list with an item that isn't a map is reported", %{conn: conn, sock: sock} do
+      task = Task.async(fn -> Registries.list_areas(conn) end)
+      assert_receive {:fake_ha, ^sock, %{"id" => id}}, 1_000
+      FakeHA.result(sock, id, [nil])
+      assert Task.await(task) == {:error, {:unexpected_result, [nil]}}
+    end
+
     test "an HA error is returned", %{conn: conn, sock: sock} do
       task = Task.async(fn -> Registries.list_floors(conn) end)
       assert_receive {:fake_ha, ^sock, %{"id" => id}}, 1_000

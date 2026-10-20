@@ -203,6 +203,8 @@ defmodule Hassock.IntegrationTest do
   end
 
   defp first_light({:ok, conn}) do
+    # start_link returns before the connection is up.
+    assert_receive {:hassock, ^conn, :connected}, @timeout
     {:ok, states} = Connection.get_states(conn)
 
     states

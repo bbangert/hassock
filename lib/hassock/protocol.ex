@@ -54,11 +54,11 @@ defmodule Hassock.Protocol do
           | :auth_ok
           | {:auth_invalid, String.t()}
           | {:result, integer(), boolean(), term()}
-          | {:state_changed, integer(), EntityState.t(), EntityState.t() | nil}
+          | {:state_changed, integer(), EntityState.t() | nil, EntityState.t() | nil}
           | {:entities, integer(), entities_payload()}
           | {:registry_updated, integer(), registry_kind(), registry_action(), String.t() | nil}
           | {:event, integer(), String.t(), map()}
-          | :pong
+          | {:pong, integer() | nil}
           | {:unknown, term()}
           | {:invalid, Exception.t()}
 
@@ -108,24 +108,26 @@ defmodule Hassock.Protocol do
   defp parse_decoded(%{"type" => "auth_invalid"}),
     do: {:auth_invalid, "unknown reason"}
 
-  defp parse_decoded(%{"type" => "pong"}), do: :pong
+  defp parse_decoded(%{"type" => "pong"} = msg), do: {:pong, Map.get(msg, "id")}
 
   defp parse_decoded(%{
          "type" => "event",
          "id" => id,
          "event" => %{
            "event_type" => "state_changed",
-           "data" => %{"entity_id" => entity_id, "new_state" => %{} = new_state_map} = data
+           "data" => %{"entity_id" => entity_id, "new_state" => new_state_map} = data
          }
        })
-       when is_binary(entity_id) do
+       when is_binary(entity_id) and (is_map(new_state_map) or is_nil(new_state_map)) do
     old_state =
       case Map.get(data, "old_state") do
         %{} = old_state_map -> parse_state(entity_id, old_state_map)
         _ -> nil
       end
 
-    {:state_changed, id, parse_state(entity_id, new_state_map), old_state}
+    # new_state is nil when the entity was removed.
+    new_state = if new_state_map, do: parse_state(entity_id, new_state_map)
+    {:state_changed, id, new_state, old_state}
   end
 
   defp parse_decoded(%{"type" => "event", "id" => id, "event" => %{} = ev})

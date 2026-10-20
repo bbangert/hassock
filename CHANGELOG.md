@@ -65,6 +65,8 @@ These change behaviour for 0.2 code:
 - `wss://` connections verify the server certificate against the system CA
   store. Without a store, a warning is logged and the certificate isn't
   verified; set `ssl_options`. URL schemes are matched in any letter case.
+- `Hassock.Protocol.parse/1` returns pongs as `{:pong, id}` (was `:pong`), so
+  a `"ping"` sent with `command/4` gets its answer.
 - `Hassock.Protocol.parse/1` returns every result as
   `{:result, id, success, result}`; the `{:states, ...}` and
   `{:services, ...}` variants are gone (`Hassock.Protocol.decode_states/1`

@@ -28,7 +28,8 @@ defmodule Hassock.Connection do
 
   Event payload variants:
 
-    * `{:state_changed, new_state, old_state}` - from `subscribe_events("state_changed")`
+    * `{:state_changed, new_state, old_state}` - from `subscribe_events("state_changed")`;
+      `new_state` is `nil` when the entity was removed
     * `{:entities, %{added: _, changed: _, removed: _}}` - from `subscribe_entities/2`
     * `{:registry_updated, kind, action, id}` - from `subscribe_events/2` with
       one of `Hassock.Protocol.registry_event_types/0`
@@ -78,6 +79,8 @@ defmodule Hassock.Connection do
       :pong_timer,
       # tags the current ping/pong timer messages, so stale ones are ignored
       :ping_ref,
+      # message id of the keepalive ping awaiting its pong
+      :ping_id,
       :connect_timer,
       :connect_ref,
       :connected_at,
@@ -517,14 +520,18 @@ defmodule Hassock.Connection do
   defp route({:event, id, type, raw}, state),
     do: deliver(state, id, {:event, {:other, type, raw}})
 
-  # Only a pong answering our ping restarts the ping cycle; an unsolicited
-  # one would start a second cycle.
-  defp route(:pong, %State{pong_timer: nil} = state), do: state
+  # A pong answers either a "ping" sent through command/4 or the keepalive
+  # ping. Only the keepalive's own pong restarts the ping cycle; any other
+  # would start a second cycle.
+  defp route({:pong, id}, state) when is_map_key(state.pending, id),
+    do: route({:result, id, true, nil}, state)
 
-  defp route(:pong, state) do
-    Process.cancel_timer(state.pong_timer)
-    schedule_ping(%{state | pong_timer: nil})
+  defp route({:pong, id}, %State{ping_id: id, pong_timer: timer} = state) when timer != nil do
+    Process.cancel_timer(timer)
+    schedule_ping(%{state | pong_timer: nil, ping_id: nil})
   end
+
+  defp route({:pong, _id}, state), do: state
 
   defp route({:invalid, error}, state) do
     Logger.warning("Hassock: dropping undecodable frame: #{Exception.message(error)}")
@@ -881,13 +888,13 @@ defmodule Hassock.Connection do
     send_text(state, Protocol.encode_ping(id))
     ref = make_ref()
     timer = Process.send_after(self(), {:pong_timeout, ref}, state.config.ping_timeout)
-    %{state | next_id: id + 1, ping_timer: nil, pong_timer: timer, ping_ref: ref}
+    %{state | next_id: id + 1, ping_timer: nil, pong_timer: timer, ping_ref: ref, ping_id: id}
   end
 
   defp cancel_ping(state) do
     if state.ping_timer, do: Process.cancel_timer(state.ping_timer)
     if state.pong_timer, do: Process.cancel_timer(state.pong_timer)
-    %{state | ping_timer: nil, pong_timer: nil, ping_ref: nil}
+    %{state | ping_timer: nil, pong_timer: nil, ping_ref: nil, ping_id: nil}
   end
 
   defp cancel_connect_timer(%State{connect_timer: nil} = state), do: state

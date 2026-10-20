@@ -60,10 +60,16 @@ defmodule Hassock.Registries do
     opts = Keyword.put_new(opts, :timeout, @default_timeout)
 
     case Connection.command(conn, "config/#{kind}_registry/list", %{}, opts) do
-      {:ok, items} when is_list(items) -> {:ok, Enum.map(items, &decode(kind, &1))}
+      {:ok, items} when is_list(items) -> decode_all(kind, items)
       {:ok, other} -> {:error, {:unexpected_result, other}}
       {:error, _} = error -> error
     end
+  end
+
+  defp decode_all(kind, items) do
+    if Enum.all?(items, &is_map/1),
+      do: {:ok, Enum.map(items, &decode(kind, &1))},
+      else: {:error, {:unexpected_result, items}}
   end
 
   @doc "Decode one registry item of `kind` into its struct."

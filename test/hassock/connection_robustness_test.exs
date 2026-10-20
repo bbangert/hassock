@@ -171,6 +171,19 @@ defmodule Hassock.ConnectionRobustnessTest do
       assert await_auth(conn) != sock
     end
 
+    test "a ping sent with command/4 gets its pong, which doesn't count for the keepalive" do
+      %{conn: conn, sock: sock} = connect(ping_interval: 30, ping_timeout: 150)
+      FakeHA.auto_pong(sock, false)
+      assert_receive {:fake_ha, ^sock, %{"type" => "ping", "id" => _keepalive}}, 500
+
+      task = Task.async(fn -> Hassock.command(conn, "ping") end)
+      assert_receive {:fake_ha, ^sock, %{"type" => "ping", "id" => id}}, 500
+      FakeHA.push(sock, %{id: id, type: "pong"})
+      assert Task.await(task) == {:ok, nil}
+
+      assert_receive {:hassock, ^conn, {:disconnected, :ping_timeout}}, 1_000
+    end
+
     test "an unsolicited pong doesn't start a second ping cycle" do
       %{sock: sock} = connect(ping_interval: 100, ping_timeout: 1_000)
       for id <- 1..5, do: FakeHA.push(sock, %{id: 1_000 + id, type: "pong"})

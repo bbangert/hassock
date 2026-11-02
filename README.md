@@ -66,14 +66,15 @@ their ids, so don't resubscribe on `:connected` (a restored
 to restore one, you get `{:hassock, conn, {:subscription_lost, id, error}}`
 and the subscription is dropped.
 
-Events go to the controlling process. Pass `to: pid` to `subscribe_events/3`
-or `subscribe_entities/3` to send a subscription's events elsewhere; it is
+Events go to the controlling process. Pass `to: pid` to `subscribe_events/3`,
+`subscribe_entities/3` or `subscribe_template/3` to send a subscription's events elsewhere; it is
 cancelled when that process exits.
 
 > **Note:** these `changed` entries are *diffs*, not full entity states —
 > each one describes only the fields that changed (state, specific attribute
 > additions, specific attribute removals). It's up to your code to apply
-> them against prior state if you need the complete picture. The `added`
+> them against prior state if you need the complete picture;
+> `Hassock.EntityState.apply_diff/2` does that for one entity. The `added`
 > map (initial snapshot and any newly-created entities) does carry full
 > `%Hassock.EntityState{}` structs. If you'd rather get fully-materialized
 > states and old-vs-new comparisons out of the box, use `Hassock.Cache`.
@@ -237,6 +238,48 @@ self-signed certificate:
 if the certificate uses a wildcard name. `ssl_options: [verify: :verify_none]`
 turns verification off explicitly. Plain `http://` sends the token
 unencrypted.
+
+### Dashboards
+
+Read the dashboard list and a dashboard's views and cards. These commands
+cover Lovelace dashboards, HA's internal name for its configurable,
+card-based dashboards: Overview and the ones you add yourself. Built-in
+panels such as Energy, History, and Logbook are separate frontend pages and
+are not included.
+
+```elixir
+{:ok, dashboards} = Hassock.lovelace_dashboards(conn)
+# [%{"url_path" => "dashboard-kitchen", "title" => "Kitchen", "mode" => "storage", ...}]
+
+{:ok, config} = Hassock.lovelace_config(conn, "dashboard-kitchen")
+{:ok, default} = Hassock.lovelace_config(conn, nil)
+```
+
+Recent HA versions list the default dashboard as `"lovelace"`; older ones
+and YAML setups may leave it out. Passing `nil` fetches it either way. An
+auto-generated dashboard returns `%{"strategy" => %{"type" => ...}}` instead
+of views; a dashboard with no config at all gives
+`{:error, %{"code" => "config_not_found", ...}}`.
+
+### Live templates
+
+`subscribe_template/3` has HA render a template (such as a Markdown card's)
+and render it again whenever something it depends on changes:
+
+```elixir
+{:ok, sub_id} =
+  Hassock.subscribe_template(conn, "{{ states('sensor.power') }} W", report_errors: true)
+
+# {:hassock, ^conn, {:event, {:template, ^sub_id, %{result: "120 W", listeners: _}}}}
+# {:hassock, ^conn, {:event, {:template, ^sub_id, %{error: message, level: "ERROR"}}}}
+```
+
+`result` keeps the type HA gives it: output that parses as a number, list or
+map arrives as one. Options are `:variables`, `:render_timeout` (seconds),
+`:strict` and `:report_errors`, plus `:to` and `:timeout` (ms) as for the
+other subscriptions. Like them it is restored after a reconnect, with the
+same id; cancel it with `unsubscribe_events/2`. A `Hassock.Cache` drops
+template events, so beside a cache subscribe with `to: self()`.
 
 ### Hand off message reception
 

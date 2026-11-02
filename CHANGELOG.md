@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `Hassock.lovelace_dashboards/2` lists the Lovelace dashboards, and
+  `lovelace_config/3` fetches one's views and cards (`nil` for the default
+  dashboard; `:force` and `:timeout` options).
+- `Hassock.subscribe_template/3` subscribes to a rendered template. Renders
+  arrive as `{:event, {:template, subscription_id, payload}}`; options
+  `:variables`, `:render_timeout`, `:strict`, `:report_errors`, `:to` and
+  `:timeout`. It is restored after a reconnect like other subscriptions.
+- `Hassock.EntityState.apply_diff/2` applies one `subscribe_entities` diff,
+  which `Hassock.Cache` now uses.
+- `Hassock.Protocol.decode_template_event/1`, `encode_lovelace_dashboards/1`,
+  `encode_lovelace_config/3`, `encode_render_template/3`,
+  `lovelace_config_payload/2` and `render_template_payload/2`.
+
+### Changed
+
+- An event that arrives before its subscribe result goes to the
+  subscription's receiver (the `:to` pid) instead of the controller, and
+  one for a subscribe whose caller timed out is dropped.
+- A command payload that can't be encoded as JSON raises in the caller
+  instead of crashing the connection.
+
 ## 0.3.0
 
 ### Added

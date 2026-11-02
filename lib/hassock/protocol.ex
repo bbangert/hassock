@@ -22,6 +22,8 @@ defmodule Hassock.Protocol do
   - `subscribe_entities` — efficient targeted entity subscription
   - `unsubscribe_events` — cancel any subscription
   - `call_service`, `get_states`, `get_services`, `ping`
+  - `lovelace/dashboards/list`, `lovelace/config` — dashboard listing and config
+  - `render_template` — subscribe to a rendered template
   - any other command through `encode_command/3`
 
   Results are returned undecoded (`{:result, id, success, result}`): only the
@@ -48,6 +50,17 @@ defmodule Hassock.Protocol do
           },
           removed: %{optional(:attributes) => [String.t()]}
         }
+
+  @typedoc """
+  A `render_template` event, decoded by `decode_template_event/1`. `result`
+  is whatever the template renders to: HA turns output that parses as a
+  number, list, or map into that type. `listeners` says what HA watches to
+  re-render it. Error events only arrive when the subscription asked for
+  `report_errors: true`.
+  """
+  @type template_payload ::
+          %{result: term(), listeners: map()}
+          | %{error: String.t(), level: String.t()}
 
   @type parsed ::
           :auth_required
@@ -189,6 +202,18 @@ defmodule Hassock.Protocol do
       {domain, services |> Map.keys() |> Enum.sort()}
     end)
   end
+
+  @doc """
+  Decode the `event` of a `render_template` subscription. Template events
+  carry no `event_type`, so `parse/1` passes them through as
+  `{:event, id, nil, event}`; only the sender knows an id is a template.
+  """
+  @spec decode_template_event(map()) :: template_payload()
+  def decode_template_event(%{"error" => error} = event),
+    do: %{error: error, level: Map.get(event, "level", "ERROR")}
+
+  def decode_template_event(%{} = event),
+    do: %{result: Map.get(event, "result"), listeners: map_or_empty(Map.get(event, "listeners"))}
 
   defp parse_state(entity_id, %{} = state_map) when is_binary(entity_id) do
     %EntityState{
@@ -355,6 +380,53 @@ defmodule Hassock.Protocol do
 
   defp put_if(map, key, value, true), do: Map.put(map, key, value)
   defp put_if(map, _key, _value, _), do: map
+
+  @doc "Encode a `lovelace/dashboards/list` command."
+  @spec encode_lovelace_dashboards(integer()) :: String.t()
+  def encode_lovelace_dashboards(id), do: encode_command(id, "lovelace/dashboards/list")
+
+  @doc """
+  Encode a `lovelace/config` command. A `nil` `url_path` asks for the default
+  dashboard. `force: true` makes HA reload a YAML dashboard from disk.
+  """
+  @spec encode_lovelace_config(integer(), String.t() | nil, boolean()) :: String.t()
+  def encode_lovelace_config(id, url_path, force \\ false) do
+    encode_command(id, "lovelace/config", lovelace_config_payload(url_path, force))
+  end
+
+  @doc "The `lovelace/config` fields (everything but `id` and `type`)."
+  @spec lovelace_config_payload(String.t() | nil, boolean()) :: map()
+  def lovelace_config_payload(url_path, force) when is_boolean(force) do
+    put_if(%{"force" => force}, "url_path", url_path, url_path != nil)
+  end
+
+  @doc """
+  Encode a `render_template` command. Options: `:variables` (map),
+  `:render_timeout` (seconds, sent as HA's `timeout`: HA rejects the
+  template if a test render takes longer), `:strict` (error on undefined
+  variables), and `:report_errors` (send render errors as events). Other
+  options are ignored.
+  """
+  @spec encode_render_template(integer(), String.t(), keyword) :: String.t()
+  def encode_render_template(id, template, opts \\ []) do
+    encode_command(id, "render_template", render_template_payload(template, opts))
+  end
+
+  @render_template_opts [
+    variables: "variables",
+    render_timeout: "timeout",
+    strict: "strict",
+    report_errors: "report_errors"
+  ]
+
+  @doc "The `render_template` fields (everything but `id` and `type`)."
+  @spec render_template_payload(String.t(), keyword) :: map()
+  def render_template_payload(template, opts \\ []) when is_binary(template) do
+    for {opt, field} <- @render_template_opts,
+        Keyword.has_key?(opts, opt),
+        into: %{"template" => template},
+        do: {field, Keyword.fetch!(opts, opt)}
+  end
 
   @doc "Encode a `ping` command."
   @spec encode_ping(integer()) :: String.t()

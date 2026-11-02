@@ -33,6 +33,8 @@ defmodule Hassock.Connection do
     * `{:entities, %{added: _, changed: _, removed: _}}` - from `subscribe_entities/2`
     * `{:registry_updated, kind, action, id}` - from `subscribe_events/2` with
       one of `Hassock.Protocol.registry_event_types/0`
+    * `{:template, subscription_id, payload}` - from `subscribe_template/3`;
+      see `t:Hassock.Protocol.template_payload/0`
     * `{:other, event_type, raw_event}` - from any other `subscribe_events/2`
       type, and (with `event_type` `nil`) events without one, such as those
       of a `render_template` subscription made with `command/4`
@@ -41,7 +43,8 @@ defmodule Hassock.Connection do
 
   Subscriptions survive reconnects: after each re-auth the connection
   re-sends every active subscription, and the id returned by
-  `subscribe_entities/2` / `subscribe_events/2` stays valid. A
+  `subscribe_entities/2` / `subscribe_events/2` / `subscribe_template/3`
+  stays valid. A
   `subscribe_entities/2` subscription starts with a full snapshot again.
 
   Events go to the controlling process (and follow it through
@@ -219,6 +222,42 @@ defmodule Hassock.Connection do
     request(conn, "subscribe_events", payload, {:subscribe, :events, to(opts), self()}, opts)
   end
 
+  @doc """
+  Subscribe to a rendered Home Assistant template. HA renders it right away
+  and again whenever an entity or time it depends on changes; each render
+  arrives as `{:hassock, conn, {:event, {:template, subscription_id,
+  payload}}}`, where payload is `%{result: _, listeners: _}` or, with
+  `report_errors: true`, `%{error: _, level: _}` (see
+  `t:Hassock.Protocol.template_payload/0`).
+
+  Returns `{:ok, subscription_id}`. A template that fails to compile returns
+  `{:error, %{"code" => "template_error", ...}}`. Like other subscriptions it
+  is restored after a reconnect, and HA renders it again then. Options:
+
+    * `:variables` - map of variables available to the template
+    * `:render_timeout` - seconds; HA rejects the template if a test render
+      takes longer (sent as HA's `timeout` field)
+    * `:strict` - make undefined variables an error
+    * `:report_errors` - send render errors as events instead of only logging
+      them in HA
+    * `:to` and `:timeout`, as for `subscribe_entities/3`; `:timeout` is the
+      ms to wait for HA's answer, not the render timeout
+
+  HA can send an error event before it answers the subscribe, so with
+  `report_errors: true` the receiver may get a template event before the
+  caller gets `{:ok, subscription_id}`; the event carries that id. If the
+  subscribe then fails, no further events follow.
+
+  A `Hassock.Cache` drops template events it receives as controller; to use
+  a template beside a cache, subscribe with `to: self()`.
+  """
+  @spec subscribe_template(GenServer.server(), String.t(), keyword) ::
+          {:ok, integer} | {:error, command_error}
+  def subscribe_template(conn, template, opts \\ []) when is_binary(template) do
+    payload = Protocol.render_template_payload(template, opts)
+    request(conn, "render_template", payload, {:subscribe, :template, to(opts), self()}, opts)
+  end
+
   defp to(opts) do
     case Keyword.get(opts, :to) do
       to when is_pid(to) or is_nil(to) -> to
@@ -227,8 +266,8 @@ defmodule Hassock.Connection do
   end
 
   @doc """
-  Cancel a subscription returned by `subscribe_entities/2` or
-  `subscribe_events/2`. While disconnected this just forgets the
+  Cancel a subscription returned by `subscribe_entities/2`,
+  `subscribe_events/2`, or `subscribe_template/3`. While disconnected this just forgets the
   subscription, so it isn't restored.
   """
   @spec unsubscribe_events(GenServer.server(), integer) :: :ok | {:error, command_error}
@@ -257,6 +296,42 @@ defmodule Hassock.Connection do
           {:ok, %{String.t() => [String.t()]}} | {:error, command_error}
   def get_services(conn), do: request(conn, "get_services", %{}, :get_services, [])
 
+  @doc """
+  List the dashboards HA stores or loads from YAML.
+
+  These are Lovelace dashboards, HA's internal name for its configurable,
+  card-based dashboards. Built-in panels such as Energy, History, and
+  Logbook are not Lovelace dashboards and are not listed.
+
+  Recent HA versions list the default dashboard as `"lovelace"`; older ones
+  and YAML setups may leave it out. `lovelace_config(conn, nil)` fetches it
+  either way. Options: `:timeout` in ms (default 10 s).
+  """
+  @spec lovelace_dashboards(GenServer.server(), keyword) :: {:ok, [map]} | {:error, command_error}
+  def lovelace_dashboards(conn, opts \\ []),
+    do: request(conn, "lovelace/dashboards/list", %{}, :raw, opts)
+
+  @doc """
+  Fetch the config (views and cards) of one dashboard.
+
+  `url_path` is the dashboard's `url_path` from `lovelace_dashboards/1`, or
+  `nil` for the default dashboard. Options:
+
+    * `:force` - make HA reload a YAML dashboard from disk (default `false`)
+    * `:timeout` - ms to wait for HA (default 10 s)
+
+  An auto-generated dashboard returns `%{"strategy" => %{"type" => ...}}`
+  instead of views. A dashboard with no config at all gives an error whose
+  `"code"` is `"config_not_found"`.
+  """
+  @spec lovelace_config(GenServer.server(), String.t() | nil, keyword) ::
+          {:ok, map} | {:error, command_error}
+  def lovelace_config(conn, url_path, opts \\ [])
+      when is_binary(url_path) or is_nil(url_path) do
+    payload = Protocol.lovelace_config_payload(url_path, Keyword.get(opts, :force, false))
+    request(conn, "lovelace/config", payload, :raw, opts)
+  end
+
   @doc "True if authenticated and the underlying socket is connected."
   @spec connected?(GenServer.server()) :: boolean
   def connected?(conn), do: sync_request(conn, :connected?, 1_000) == true
@@ -278,6 +353,9 @@ defmodule Hassock.Connection do
 
   defp request(conn, type, payload, kind, opts) do
     timeout = Keyword.get(opts, :timeout, @default_timeout)
+    # Raise in the caller on a payload that can't be encoded (such as a
+    # tuple in :variables), not later in the connection every client shares.
+    _ = Protocol.encode_command(0, type, payload)
     sync_request(conn, {:command, type, payload, kind, timeout}, timeout)
   end
 
@@ -518,6 +596,19 @@ defmodule Hassock.Connection do
 
   defp route({:registry_updated, id, kind, action, item_id}, state),
     do: deliver(state, id, {:event, {:registry_updated, kind, action, item_id}})
+
+  # Template events carry no event_type; only the subscription says what
+  # they are.
+  defp route({:event, id, nil, raw}, state) do
+    case template_subscription(state, id) do
+      nil ->
+        deliver(state, id, {:event, {:other, nil, raw}})
+
+      sub_id ->
+        payload = Protocol.decode_template_event(raw)
+        deliver(state, id, {:event, {:template, sub_id, payload}})
+    end
+  end
 
   defp route({:event, id, type, raw}, state),
     do: deliver(state, id, {:event, {:other, type, raw}})
@@ -881,6 +972,22 @@ defmodule Hassock.Connection do
     end)
   end
 
+  # The subscription id a template event belongs to, or nil. HA can send a
+  # template's error events before the subscribe result, so a still-pending
+  # subscribe counts too; its id becomes the subscription id.
+  defp template_subscription(state, ha_id) do
+    case {Map.fetch(state.ha_subs, ha_id), Map.get(state.pending, ha_id)} do
+      {{:ok, sub_id}, _} ->
+        if match?(%{kind: :template}, state.subscriptions[sub_id]), do: sub_id
+
+      {:error, {_ref, {:subscribe, :template, _, _, _, _}, _timer}} ->
+        ha_id
+
+      _ ->
+        nil
+    end
+  end
+
   # Events for an id with no tracked subscription (one made through
   # command/4) go to the controller, as every event did in 0.2; events for
   # a cancelled subscription are dropped.
@@ -892,6 +999,16 @@ defmodule Hassock.Connection do
       Map.has_key?(state.ha_subs, ha_id) ->
         sub = Map.fetch!(state.subscriptions, Map.fetch!(state.ha_subs, ha_id))
         deliver_to(state, sub.subscriber, payload)
+
+      # An event that beats its subscribe result goes where the subscription
+      # will deliver.
+      match?({_ref, {:subscribe, _, _, _, _, _}, _timer}, state.pending[ha_id]) ->
+        {_ref, {:subscribe, _kind, subscriber, _, _, _}, _timer} = state.pending[ha_id]
+        deliver_to(state, subscriber, payload)
+
+      # Its caller gave up: the subscription is cancelled once HA answers.
+      match?({nil, {:cancelled, {:subscribe, _, _, _, _, _}}, _timer}, state.pending[ha_id]) ->
+        :ok
 
       true ->
         notify(state, payload)

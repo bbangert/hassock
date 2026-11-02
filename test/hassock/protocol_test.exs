@@ -345,6 +345,35 @@ defmodule Hassock.ProtocolTest do
     end
   end
 
+  describe "decode_template_event/1" do
+    test "a render result" do
+      event = %{"result" => "💻 **Aan** sinds 14:05", "listeners" => %{"entities" => ["a.b"]}}
+
+      assert Protocol.decode_template_event(event) ==
+               %{result: "💻 **Aan** sinds 14:05", listeners: %{"entities" => ["a.b"]}}
+    end
+
+    test "a non-string result keeps its type" do
+      assert %{result: 21.5} = Protocol.decode_template_event(%{"result" => 21.5})
+    end
+
+    test "a render error" do
+      event = %{"error" => "UndefinedError: 'x' is undefined", "level" => "ERROR"}
+
+      assert Protocol.decode_template_event(event) ==
+               %{error: "UndefinedError: 'x' is undefined", level: "ERROR"}
+    end
+
+    test "missing or malformed listeners and level get defaults" do
+      assert %{listeners: %{}} = Protocol.decode_template_event(%{"result" => "x"})
+
+      assert %{listeners: %{}} =
+               Protocol.decode_template_event(%{"result" => "x", "listeners" => 1})
+
+      assert %{level: "ERROR"} = Protocol.decode_template_event(%{"error" => "boom"})
+    end
+  end
+
   describe "parse/1 — other events" do
     test "non-state_changed event is passed through" do
       json =
@@ -410,6 +439,58 @@ defmodule Hassock.ProtocolTest do
     test "encode_get_states/1" do
       assert %{"id" => 5, "type" => "get_states"} =
                Protocol.encode_get_states(5) |> Jason.decode!()
+    end
+
+    test "encode_lovelace_dashboards/1" do
+      assert %{"id" => 5, "type" => "lovelace/dashboards/list"} =
+               Protocol.encode_lovelace_dashboards(5) |> Jason.decode!()
+    end
+
+    test "encode_lovelace_config/3 with nil url_path omits it" do
+      decoded = Protocol.encode_lovelace_config(5, nil) |> Jason.decode!()
+      assert decoded == %{"id" => 5, "type" => "lovelace/config", "force" => false}
+    end
+
+    test "encode_lovelace_config/3 with url_path and force" do
+      decoded = Protocol.encode_lovelace_config(5, "dashboard-energy", true) |> Jason.decode!()
+      assert decoded["url_path"] == "dashboard-energy"
+      assert decoded["force"] == true
+    end
+
+    test "lovelace_config_payload/2 and render_template_payload/2 leave out id and type" do
+      assert Protocol.lovelace_config_payload("kitchen", false) ==
+               %{"url_path" => "kitchen", "force" => false}
+
+      assert Protocol.lovelace_config_payload(nil, true) == %{"force" => true}
+
+      assert Protocol.render_template_payload("{{ 1 }}", render_timeout: 2, strict: false) ==
+               %{"template" => "{{ 1 }}", "timeout" => 2, "strict" => false}
+    end
+
+    test "encode_render_template/3 minimal" do
+      decoded = Protocol.encode_render_template(5, "{{ 1 }}") |> Jason.decode!()
+      assert decoded == %{"id" => 5, "type" => "render_template", "template" => "{{ 1 }}"}
+    end
+
+    test "encode_render_template/3 with options drops unknown ones" do
+      decoded =
+        Protocol.encode_render_template(5, "{{ x }}",
+          variables: %{x: 1},
+          render_timeout: 2.5,
+          strict: true,
+          report_errors: true,
+          timeout: 10_000,
+          to: self(),
+          bogus: 1
+        )
+        |> Jason.decode!()
+
+      assert decoded["variables"] == %{"x" => 1}
+      assert decoded["timeout"] == 2.5
+      assert decoded["strict"] == true
+      assert decoded["report_errors"] == true
+      refute Map.has_key?(decoded, "bogus")
+      refute Map.has_key?(decoded, "to")
     end
 
     test "encode_call_service/2 minimal" do

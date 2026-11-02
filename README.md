@@ -25,7 +25,7 @@ Requires Home Assistant ≥ 2022.4 if you use `Hassock.Cache`
 ```elixir
 def deps do
   [
-    {:hassock, "~> 0.3.0"}
+    {:hassock, "~> 0.4.0"}
   ]
 end
 ```

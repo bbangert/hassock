@@ -60,7 +60,7 @@ defmodule Hassock.MixProject do
   defp docs do
     [
       main: "readme",
-      source_ref: "v#{@version}",
+      source_ref: @version,
       extras: ["README.md", "CHANGELOG.md"],
       before_closing_body_tag: &before_closing_body_tag/1
     ]

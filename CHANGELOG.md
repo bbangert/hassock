@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The docs' "View Source" links point at the release tag (they pointed at a
+  `v`-prefixed tag that doesn't exist).
+
 ## 0.4.0
 
 ### Added
